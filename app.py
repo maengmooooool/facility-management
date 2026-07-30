@@ -2,7 +2,6 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 from datetime import date, datetime, timedelta
-import os
 import time
 
 # --- 1. Supabase 클라우드 데이터베이스 연결 ---
@@ -83,20 +82,17 @@ if menu == "⚙️ 기계설비 관리":
     
     equip_names = sorted(list(set([row['name'] for row in equip_data]))) if equip_data else ["등록된 설비 없음"]
     existing_locations = sorted(list(set([row['location'] for row in equip_data if row.get('location')]))) if equip_data else []
+    
+    # 설비별 사진 URL 매핑 (DB에 저장된 photo 컬럼이 곧 인터넷 주소)
     equip_photo_map = {row['name']: row.get('photo', '사진 없음') for row in equip_data} if equip_data else {}
     
-    # 🌟 탭별로 고유 키를 부여하여 중복 에러를 방지하는 사진 렌더링 함수
-    def render_equipment_photo(eq_name, tab_prefix, width=300):
-        photo_filename = equip_photo_map.get(eq_name, "사진 없음")
-        if photo_filename and photo_filename != "사진 없음":
-            if os.path.exists(photo_filename):
-                st.image(photo_filename, caption=f"{eq_name} 사진", width=width)
-            else:
-                upl = st.file_uploader(f"[{eq_name}] 기존 이미지 파일 확인을 위해 '{photo_filename}' 파일을 선택해 주세요 (최초 1회)", type=["jpg", "png", "jpeg"], key=f"auto_up_{tab_prefix}_{eq_name}")
-                if upl is not None:
-                    st.image(upl, caption=f"{eq_name} 사진", width=width)
-                else:
-                    st.info(f"💡 DB에 저장된 사진명: **{photo_filename}** (동일한 이름의 이미지를 업로드하면 항상 자동 표시됩니다.)")
+    # 🌟 DB에 저장된 영구 이미지 URL을 불러와 화면에 출력하는 함수
+    def render_equipment_photo(eq_name, width=300):
+        photo_url = equip_photo_map.get(eq_name, "사진 없음")
+        if photo_url and photo_url.startswith("http"):
+            st.image(photo_url, caption=f"{eq_name} 사진", width=width)
+        else:
+            st.info(f"💡 등록된 설비 사진이 없습니다. (설비 등록 및 현황에서 사진을 첨부해 주세요)")
 
     # --- [탭 1] 설비 등록 및 현황 ---
     with tab_equip:
@@ -117,14 +113,22 @@ if menu == "⚙️ 기계설비 관리":
             
             if st.button("신규 설비 등록 저장"):
                 if equip_name and final_location:
-                    photo_name = equip_photo.name if equip_photo else "사진 없음"
+                    photo_url = "사진 없음"
+                    
+                    # 🌟 사용자가 사진을 올리면 Supabase Storage에 업로드하고 영구 퍼블릭 URL을 받아옴
                     if equip_photo is not None:
-                        with open(equip_photo.name, "wb") as f:
-                            f.write(equip_photo.getbuffer())
+                        file_bytes = equip_photo.getvalue()
+                        file_path = f"{int(time.time())}_{equip_photo.name}"
+                        try:
+                            supabase.storage.from_("equipment-photos").upload(file_path, file_bytes)
+                            res_url = supabase.storage.from_("equipment-photos").get_public_url(file_path)
+                            photo_url = res_url
+                        except Exception as e:
+                            st.error(f"사진 업로드 중 오류 발생: {e}")
                             
                     supabase.table("equipment").insert({
                         "name": equip_name, "location": final_location, "status": status,
-                        "cost": equip_cost, "photo": photo_name, "install_date": str(install_date)
+                        "cost": equip_cost, "photo": photo_url, "install_date": str(install_date)
                     }).execute()
                     st.success(f"✅ [{equip_name}] 등록 완료!")
                     st.rerun()
@@ -142,10 +146,6 @@ if menu == "⚙️ 기계설비 관리":
             df_equip_display = df_equip[['install_date', 'name', 'location', 'cost', 'status']].sort_values(by='install_date', ascending=False)
             df_equip_display.columns = ['등록일', '설비명', '위치/공정', '취득금액(원)', '상태']
             st.dataframe(df_equip_display, use_container_width=True, hide_index=True)
-            
-            if equip_photo is not None:
-                st.markdown("🖼️ **최근 업로드한 설비 사진 미리보기:**")
-                st.image(equip_photo, width=300)
 
     # --- [탭 2] 점검 내역 관리 ---
     with tab_inspect:
@@ -153,8 +153,9 @@ if menu == "⚙️ 기계설비 관리":
         
         target_equip_ins = st.selectbox("점검한 설비 선택", equip_names, key="inspect_eq_target")
         
+        # 🌟 로그아웃 후 재로그인해도 DB 주소로 사진 항상 고정 출력
         if equip_data and target_equip_ins != "등록된 설비 없음":
-            render_equipment_photo(target_equip_ins, tab_prefix="inspect", width=300)
+            render_equipment_photo(target_equip_ins, width=300)
 
         with st.form("inspect_form"):
             inspect_date = st.date_input("점검 일자", date.today())
@@ -190,8 +191,9 @@ if menu == "⚙️ 기계설비 관리":
         
         target_equip_part = st.selectbox("부품을 교체한 설비 선택", equip_names, key="part_eq_select")
         
+        # 🌟 로그아웃 후 재로그인해도 DB 주소로 사진 항상 고정 출력
         if equip_data and target_equip_part != "등록된 설비 없음":
-            render_equipment_photo(target_equip_part, tab_prefix="parts", width=300)
+            render_equipment_photo(target_equip_part, width=300)
 
         replace_date = st.date_input("부품 교체 일자", date.today(), key="rep_date")
         
@@ -236,8 +238,9 @@ if menu == "⚙️ 기계설비 관리":
         
         search_target = st.selectbox("이력을 조회할 설비를 선택하세요", equip_names, key="search_eq")
         
+        # 🌟 로그아웃 후 재로그인해도 DB 주소로 사진 항상 고정 출력
         if equip_data and search_target != "등록된 설비 없음":
-            render_equipment_photo(search_target, tab_prefix="history", width=300)
+            render_equipment_photo(search_target, width=300)
         
         if parts_data:
             df_all_parts = pd.DataFrame(parts_data)
