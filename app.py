@@ -83,20 +83,16 @@ if menu == "⚙️ 기계설비 관리":
     
     equip_names = sorted(list(set([row['name'] for row in equip_data]))) if equip_data else ["등록된 설비 없음"]
     existing_locations = sorted(list(set([row['location'] for row in equip_data if row.get('location')]))) if equip_data else []
-    
-    # 설비별 사진 파일명 매핑
     equip_photo_map = {row['name']: row.get('photo', '사진 없음') for row in equip_data} if equip_data else {}
     
-    # 🌟 사진 파일을 자동으로 찾아주는 헬퍼 함수 (업로드 없이도 폴더나 저장소에서 로드)
-    def render_equipment_photo(eq_name, width=300):
+    # 🌟 탭별로 고유 키를 부여하여 중복 에러를 방지하는 사진 렌더링 함수
+    def render_equipment_photo(eq_name, tab_prefix, width=300):
         photo_filename = equip_photo_map.get(eq_name, "사진 없음")
         if photo_filename and photo_filename != "사진 없음":
-            # 1. 만약 현재 폴더에 해당 파일명이 존재하면 바로 띄우기
             if os.path.exists(photo_filename):
                 st.image(photo_filename, caption=f"{eq_name} 사진", width=width)
             else:
-                # 2. 폴더에 없다면 업로더를 통해 수동으로 한 번 지정할 수 있도록 보조 제공
-                upl = st.file_uploader(f"[{eq_name}] 기존 이미지 파일 확인을 위해 '{photo_filename}' 파일을 선택해 주세요 (최초 1회)", type=["jpg", "png", "jpeg"], key=f"auto_up_{eq_name}")
+                upl = st.file_uploader(f"[{eq_name}] 기존 이미지 파일 확인을 위해 '{photo_filename}' 파일을 선택해 주세요 (최초 1회)", type=["jpg", "png", "jpeg"], key=f"auto_up_{tab_prefix}_{eq_name}")
                 if upl is not None:
                     st.image(upl, caption=f"{eq_name} 사진", width=width)
                 else:
@@ -122,7 +118,6 @@ if menu == "⚙️ 기계설비 관리":
             if st.button("신규 설비 등록 저장"):
                 if equip_name and final_location:
                     photo_name = equip_photo.name if equip_photo else "사진 없음"
-                    # 업로드한 파일이 있으면 로컬 폴더에 실제로 저장해두기
                     if equip_photo is not None:
                         with open(equip_photo.name, "wb") as f:
                             f.write(equip_photo.getbuffer())
@@ -158,9 +153,8 @@ if menu == "⚙️ 기계설비 관리":
         
         target_equip_ins = st.selectbox("점검한 설비 선택", equip_names, key="inspect_eq_target")
         
-        # 🌟 로그인 후 업로드 없이도 기존 사진 자동 로드
         if equip_data and target_equip_ins != "등록된 설비 없음":
-            render_equipment_photo(target_equip_ins, width=300)
+            render_equipment_photo(target_equip_ins, tab_prefix="inspect", width=300)
 
         with st.form("inspect_form"):
             inspect_date = st.date_input("점검 일자", date.today())
@@ -196,9 +190,8 @@ if menu == "⚙️ 기계설비 관리":
         
         target_equip_part = st.selectbox("부품을 교체한 설비 선택", equip_names, key="part_eq_select")
         
-        # 🌟 로그인 후 업로드 없이도 기존 사진 자동 로드
         if equip_data and target_equip_part != "등록된 설비 없음":
-            render_equipment_photo(target_equip_part, width=300)
+            render_equipment_photo(target_equip_part, tab_prefix="parts", width=300)
 
         replace_date = st.date_input("부품 교체 일자", date.today(), key="rep_date")
         
@@ -243,9 +236,8 @@ if menu == "⚙️ 기계설비 관리":
         
         search_target = st.selectbox("이력을 조회할 설비를 선택하세요", equip_names, key="search_eq")
         
-        # 🌟 로그인 후 업로드 없이도 기존 사진 자동 로드
         if equip_data and search_target != "등록된 설비 없음":
-            render_equipment_photo(search_target, width=300)
+            render_equipment_photo(search_target, tab_prefix="history", width=300)
         
         if parts_data:
             df_all_parts = pd.DataFrame(parts_data)
