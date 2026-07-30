@@ -72,7 +72,72 @@ with st.sidebar:
     menu = st.radio("메뉴를 선택하세요", 
                     ["⚙️ 기계설비 관리", "📝 전자결재 (기안)", "📦 물류 및 재고 (ERP)"])
 
+# ==========================================
+# [메뉴 1] 기계설비 및 유지보수 관리 화면
+# ==========================================
+if menu == "⚙️ 기계설비 관리":
+    st.title("⚙️ 기계설비 및 유지보수 관리")
+    
+    tab_equip, tab_parts = st.tabs(["🚜 기계 설비 현황", "🔩 수리 및 부품 내역"])
+    
+    # --- [탭 1] 설비 현황 ---
+    with tab_equip:
+        st.write("공장 내 주요 기계 설비를 등록하고 상태를 관리합니다.")
+        
+        with st.form("equip_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                equip_name = st.text_input("설비명 (예: 1호기 파쇄기)")
+                location = st.text_input("설치 위치 (예: A동 작업장)")
+            with col2:
+                status = st.selectbox("현재 상태", ["🟢 정상 가동", "🟡 점검 요망", "🔴 수리 중"])
+            
+            submit_equip = st.form_submit_button("설비 등록하기")
+            
+            if submit_equip and equip_name:
+                supabase.table("equipment").insert({
+                    "name": equip_name, 
+                    "location": location, 
+                    "status": status
+                }).execute()
+                st.success(f"✅ {equip_name} 등록 완료!")
+                st.rerun()
+                
+        st.markdown("---")
+        st.write("📋 **등록된 기계 설비 목록**")
+        res_equip = supabase.table("equipment").select("*").execute()
+        if res_equip.data:
+            df_equip = pd.DataFrame(res_equip.data)
+            df_equip = df_equip[['created_at', 'name', 'location', 'status']].sort_values(by='created_at', ascending=False)
+            df_equip.columns = ['등록일', '설비명', '위치', '상태']
+            df_equip['등록일'] = df_equip['등록일'].apply(lambda x: x[:10])
+            st.dataframe(df_equip, use_container_width=True, hide_index=True)
+            
+    # --- [탭 2] 수리 및 부품 내역 ---
+    with tab_parts:
+        st.write("설비의 고장 수리 내역이나 부품 교체 이력을 기록합니다.")
+        
+        # 등록된 설비 이름 불러오기
+        res_equip_list = supabase.table("equipment").select("name").execute()
+        equip_names = [item['name'] for item in res_equip_list.data] if res_equip_list.data else ["등록된 설비 없음"]
+        
+        with st.form("parts_form"):
+            target_equip = st.selectbox("수리/점검한 설비 선택", equip_names)
+            issue_detail = st.text_area("수리 및 부품 교체 상세 내용")
+            cost = st.number_input("수리 비용 (원)", min_value=0, step=10000)
+            
+            submit_parts = st.form_submit_button("수리 내역 저장")
+            
+            if submit_parts and target_equip != "등록된 설비 없음":
+                supabase.table("parts").insert({
+                    "equipment_name": target_equip,
+                    "detail": issue_detail,
+                    "cost": cost
+                }).execute()
+                st.success("✅ 수리 내역이 저장되었습니다.")
+                st.rerun()
 
+    st.stop() # 👈 메뉴 1 화면 그리기 종료
 # ==========================================
 # [메뉴 2] 전자결재 시스템 화면
 # ==========================================
