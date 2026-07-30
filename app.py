@@ -48,9 +48,22 @@ if menu == "📝 전자결재 (기안)":
     
     doc_title = st.text_input("기안 제목 (예: 파쇄기 모터 교체 비용 청구)")
     doc_content = st.text_area("상세 요청 내용")
-    st.button("결재 상신하기")
+# 👇 여기서부터 버튼에 생명을 불어넣는 코드입니다!
+    if st.button("결재 상신하기"):
+        if doc_title == "":
+            st.warning("⚠️ 기안 제목을 입력해 주세요.")
+        else:
+            # Supabase의 'approvals' 표에 데이터를 저장하라는 명령어
+            data = {
+                "title": doc_title,
+                "content": doc_content,
+                "status": "대기중"
+            }
+            supabase.table("approvals").insert(data).execute()
+            
+            st.success("✅ 결재가 성공적으로 상신되었습니다!")
     
-    st.stop() # 👈 중요: 다른 메뉴를 선택했을 때는 여기서 화면 그리기를 멈춥니다!
+    st.stop() # 👈 다른 메뉴를 선택했을 때는 여기서 화면 그리기를 멈춥니다!
 
 
 # ==========================================
