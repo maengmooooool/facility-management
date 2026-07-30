@@ -121,8 +121,9 @@ if menu == "⚙️ 기계설비 관리":
                 df_equip['install_date'] = df_equip['created_at'].apply(lambda x: x[:10])
             df_equip['install_date'] = df_equip['install_date'].fillna(df_equip['created_at'].apply(lambda x: x[:10]))
             
-            df_equip_display = df_equip[['install_date', 'name', 'location', 'cost', 'status', 'photo']].sort_values(by='install_date', ascending=False)
-            df_equip_display.columns = ['등록일', '설비명', '위치/공정', '취득금액(원)', '상태', '첨부사진명']
+            # 🌟 설비 등록 목록에서 'photo' 컬럼 제외
+            df_equip_display = df_equip[['install_date', 'name', 'location', 'cost', 'status']].sort_values(by='install_date', ascending=False)
+            df_equip_display.columns = ['등록일', '설비명', '위치/공정', '취득금액(원)', '상태']
             st.dataframe(df_equip_display, use_container_width=True, hide_index=True)
             
             if equip_photo is not None:
@@ -135,7 +136,6 @@ if menu == "⚙️ 기계설비 관리":
         
         target_equip_ins = st.selectbox("점검한 설비 선택", equip_names, key="inspect_eq_target")
         
-        # 점검 내역 관리 화면 사진 크기 통일 (width=300)
         if equip_data and target_equip_ins != "등록된 설비 없음":
             matched_eq = [eq for eq in equip_data if eq['name'] == target_equip_ins]
             if matched_eq and matched_eq[0].get('photo') and matched_eq[0].get('photo') != "사진 없음":
@@ -162,10 +162,10 @@ if menu == "⚙️ 기계설비 관리":
             if 'inspect_date' not in df_ins.columns:
                 df_ins['inspect_date'] = df_ins['created_at'].apply(lambda x: x[:10])
             df_ins['inspect_date'] = df_ins['inspect_date'].fillna(df_ins['created_at'].apply(lambda x: x[:10]))
-            df_ins['photo'] = df_ins['equipment_name'].map(equip_photo_map).fillna('사진 없음')
             
-            df_ins_display = df_ins[['inspect_date', 'equipment_name', 'detail', 'photo']].sort_values(by='inspect_date', ascending=False)
-            df_ins_display.columns = ['점검일자', '설비명', '점검내역', '설비사진명']
+            # 🌟 점검 기록 목록에서 'photo' 컬럼 제외
+            df_ins_display = df_ins[['inspect_date', 'equipment_name', 'detail']].sort_values(by='inspect_date', ascending=False)
+            df_ins_display.columns = ['점검일자', '설비명', '점검내역']
             st.dataframe(df_ins_display, use_container_width=True, hide_index=True)
 
     # --- [탭 3] 부품 교체 관리 ---
@@ -177,7 +177,6 @@ if menu == "⚙️ 기계설비 관리":
         
         target_equip_part = st.selectbox("부품을 교체한 설비 선택", equip_names, key="part_eq_select")
         
-        # 부품 교체 관리 화면 사진 크기 통일 (width=300)
         if equip_data and target_equip_part != "등록된 설비 없음":
             matched_eq_p = [eq for eq in equip_data if eq['name'] == target_equip_part]
             if matched_eq_p and matched_eq_p[0].get('photo') and matched_eq_p[0].get('photo') != "사진 없음":
@@ -216,10 +215,10 @@ if menu == "⚙️ 기계설비 관리":
             if 'replace_date' not in df_pts.columns:
                 df_pts['replace_date'] = df_pts['created_at'].apply(lambda x: x[:10])
             df_pts['replace_date'] = df_pts['replace_date'].fillna(df_pts['created_at'].apply(lambda x: x[:10]))
-            df_pts['photo'] = df_pts['equipment_name'].map(equip_photo_map).fillna('사진 없음')
             
-            df_pts_display = df_pts[['replace_date', 'equipment_name', 'part_name', 'quantity', 'total_cost', 'photo']].sort_values(by='replace_date', ascending=False)
-            df_pts_display.columns = ['교체일자', '설비명', '교체부품명', '수량', '합계금액(원)', '설비사진명']
+            # 🌟 부품 교체 기록 목록에서 'photo' 컬럼 제외
+            df_pts_display = df_pts[['replace_date', 'equipment_name', 'part_name', 'quantity', 'total_cost']].sort_values(by='replace_date', ascending=False)
+            df_pts_display.columns = ['교체일자', '설비명', '교체부품명', '수량', '합계금액(원)']
             st.dataframe(df_pts_display, use_container_width=True, hide_index=True)
 
     # --- [탭 4] 이력 조회 및 데이터 관리 ---
@@ -228,7 +227,6 @@ if menu == "⚙️ 기계설비 관리":
         
         search_target = st.selectbox("이력을 조회할 설비를 선택하세요", equip_names, key="search_eq")
         
-        # 이력 조회 화면 사진 크기 통일 (width=300)
         if equip_data and search_target != "등록된 설비 없음":
             matched_eq = [eq for eq in equip_data if eq['name'] == search_target]
             if matched_eq:
