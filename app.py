@@ -40,7 +40,7 @@ if not st.session_state['logged_in']:
     
     col1, col2 = st.columns([1, 2])
     with col1:
-        login_name = st.selectbox("👤 접속자 이름", ["직원", "김공장장", "이이사", "박대표", "최팀장"])
+        login_name = st.selectbox("👤 접속자 이름", ["직원", "기계실팀장", "이사", "관리이사", "대표"])
         login_pw = st.text_input("🔑 비밀번호", type="password")
         
         if st.button("로그인"):
