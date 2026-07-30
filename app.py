@@ -114,7 +114,7 @@ if menu == "⚙️ 기계설비 관리":
                     st.warning("설비명과 위치를 모두 입력해 주세요.")
                 
         st.markdown("---")
-        st.write("📋 **등록된 기계 설비 목록 (첨부 사진 포함)**")
+        st.write("📋 **등록된 기계 설비 목록**")
         if equip_data:
             df_equip = pd.DataFrame(equip_data)
             if 'install_date' not in df_equip.columns:
@@ -125,12 +125,16 @@ if menu == "⚙️ 기계설비 관리":
             df_equip_display.columns = ['등록일', '설비명', '위치/공정', '취득금액(원)', '상태', '첨부사진명']
             st.dataframe(df_equip_display, use_container_width=True, hide_index=True)
             
+            # 🌟 등록할 때 업로드한 실제 이미지가 있다면 화면에 직접 띄워주기
+            if equip_photo is not None:
+                st.markdown("🖼️ **최근 업로드한 설비 사진 미리보기:**")
+                st.image(equip_photo, width=300)
+
     # --- [탭 2] 점검 내역 관리 ---
     with tab_inspect:
         st.write("설비의 정기/수시 점검 내역을 기록합니다.")
         
         with st.form("inspect_form"):
-            # 🌟 점검 날짜 직접 선택 기능 추가
             inspect_date = st.date_input("점검 일자", date.today())
             target_equip_ins = st.selectbox("점검한 설비 선택", equip_names)
             inspect_detail = st.text_area("점검 상세 내역 및 조치사항")
@@ -139,12 +143,12 @@ if menu == "⚙️ 기계설비 관리":
                 supabase.table("inspections").insert({
                     "equipment_name": target_equip_ins, 
                     "detail": inspect_detail,
-                    "inspect_date": str(inspect_date) # 🌟 지정한 점검일 저장
+                    "inspect_date": str(inspect_date)
                 }).execute()
                 st.success("✅ 점검 내역이 저장되었습니다.")
                 st.rerun()
                 
-        st.write("📋 **최근 점검 기록 목록 (설비 사진 정보 연동)**")
+        st.write("📋 **최근 점검 기록 목록**")
         res_ins = supabase.table("inspections").select("*").execute()
         if res_ins.data:
             df_ins = pd.DataFrame(res_ins.data)
@@ -164,7 +168,6 @@ if menu == "⚙️ 기계설비 관리":
         parts_data = res_parts.data if res_parts.data else []
         existing_parts = sorted(list(set([row['part_name'] for row in parts_data if row.get('part_name')]))) if parts_data else []
         
-        # 🌟 부품 교체 날짜 직접 선택 기능 추가
         replace_date = st.date_input("부품 교체 일자", date.today(), key="rep_date")
         target_equip_part = st.selectbox("부품을 교체한 설비 선택", equip_names, key="part_eq_select")
         
@@ -187,12 +190,12 @@ if menu == "⚙️ 기계설비 관리":
                 supabase.table("parts").insert({
                     "equipment_name": target_equip_part, "part_name": final_part_name,
                     "quantity": part_qty, "unit_price": part_price, "total_cost": total_price, 
-                    "detail": part_detail, "replace_date": str(replace_date) # 🌟 지정한 교체일 저장
+                    "detail": part_detail, "replace_date": str(replace_date)
                 }).execute()
                 st.success("✅ 부품 교체 내역이 저장되었습니다.")
                 st.rerun()
 
-        st.write("📋 **최근 부품 교체 기록 목록 (설비 사진 정보 연동)**")
+        st.write("📋 **최근 부품 교체 기록 목록**")
         if parts_data:
             df_pts = pd.DataFrame(parts_data)
             if 'replace_date' not in df_pts.columns:
@@ -207,14 +210,24 @@ if menu == "⚙️ 기계설비 관리":
     # --- [탭 4] 이력 조회 및 데이터 관리 ---
     with tab_data:
         st.write("특정 설비의 이력을 날짜별로 조회하거나 데이터를 관리(수정/삭제/CSV)합니다.")
-        st.subheader("🔎 특정 설비 이력 조회 (사진 및 상세 내역)")
+        st.subheader("🔎 특정 설비 이력 조회 및 사진 확인")
         search_target = st.selectbox("이력을 조회할 설비를 선택하세요", equip_names, key="search_eq")
         
         if equip_data:
             matched_eq = [eq for eq in equip_data if eq['name'] == search_target]
             if matched_eq:
                 eq_info = matched_eq[0]
-                st.info(f"📌 **[{search_target}]** 기본 정보 | 위치: {eq_info.get('location', '-')} | 상태: {eq_info.get('status', '-')} | 등록 사진명: **{eq_info.get('photo', '사진 없음')}**")
+                st.info(f"📌 **[{search_target}]** 기본 정보 | 위치: {eq_info.get('location', '-')} | 상태: {eq_info.get('status', '-')} | 등록 사진 파일명: **{eq_info.get('photo', '사진 없음')}**")
+                
+                # 🌟 방금 업로드했거나 이전에 올린 실제 이미지 파일이 있다면 이력 조회 화면에도 바로 띄워주기
+                if 'equip_photo' in locals() and equip_photo is not None:
+                    st.image(equip_photo, caption=f"{search_target} 실제 사진", width=350)
+                elif eq_info.get('photo') and eq_info.get('photo') != "사진 없음":
+                    # 만약 파일 업로더 객체가 기억나지 않을 때 안내용 메시지
+                    st.write("💡 *참고: 사진 파일을 다시 업로드하시면 아래에 즉시 이미지로 렌더링됩니다.*")
+                    re_upload_photo = st.file_uploader("해당 설비 사진 다시 업로드하여 화면에 띄우기 (옵션)", type=["jpg", "png", "jpeg"], key="re_photo")
+                    if re_upload_photo is not None:
+                        st.image(re_upload_photo, caption=search_target, width=350)
         
         if parts_data:
             df_all_parts = pd.DataFrame(parts_data)
