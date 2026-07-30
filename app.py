@@ -7,21 +7,18 @@ import time
 # --- 1. Supabase 클라우드 데이터베이스 연결 ---
 @st.cache_resource
 def init_connection():
-    # Streamlit Cloud의 Secrets(보안 키)에서 URL과 KEY를 가져옵니다.
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
     return create_client(url, key)
 
 supabase: Client = init_connection()
 
-# --- 2. 화면 구성 ---
+# --- 2. 화면 및 폰트 설정 ---
 st.set_page_config(page_title="(주)호성 통합시스템", layout="wide")
 
-# --- 폰트 및 글씨 크기 변경 ---
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap');
-
 html, body, [class*="css"]  {
     font-family: 'Nanum Gothic', sans-serif !important;
     font-size: 18px !important; 
@@ -31,9 +28,46 @@ html, body, [class*="css"]  {
 
 
 # ==========================================
-# 🌟 새롭게 추가되는 왼쪽 메뉴바 (사이드바) 🌟
+# 🔒 3. 보안 로그인 시스템 추가 🌟
+# ==========================================
+# 접속 상태를 기억하는 메모리 공간 생성
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
+    st.session_state['username'] = None
+
+# 로그인하지 않은 상태면 로그인 화면만 보여줌
+if not st.session_state['logged_in']:
+    st.title("🔐 (주)호성 통합시스템 로그인")
+    
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        # 기안을 올리는 '직원'과 결재를 하는 '관리자'들을 모두 포함
+        login_name = st.selectbox("👤 접속자 이름", ["직원", "김공장장", "이이사", "박대표", "최팀장"])
+        login_pw = st.text_input("🔑 비밀번호", type="password")
+        
+        if st.button("로그인"):
+            # 💡 현재는 테스트를 위해 모든 비밀번호를 '1234'로 통일해 둡니다. (추후 개별 설정 가능)
+            if login_pw == "1234":
+                st.session_state['logged_in'] = True
+                st.session_state['username'] = login_name
+                st.rerun() # 화면 새로고침
+            else:
+                st.error("⚠️ 비밀번호가 틀렸습니다.")
+                
+    st.stop() # 👈 로그인 안 하면 아래 코드(메인 화면)는 절대 안 보입니다!
+
+
+# ==========================================
+# 🌟 로그인 성공 시 나타나는 왼쪽 메뉴바 🌟
 # ==========================================
 with st.sidebar:
+    st.success(f"👤 **{st.session_state['username']}**님 접속 중")
+    if st.button("로그아웃"):
+        st.session_state['logged_in'] = False
+        st.session_state['username'] = None
+        st.rerun()
+        
+    st.markdown("---")
     st.title("🏢 (주)호성 통합메뉴")
     menu = st.radio("메뉴를 선택하세요", 
                     ["⚙️ 기계설비 관리", "📝 전자결재 (기안)", "📦 물류 및 재고 (ERP)"])
@@ -61,55 +95,13 @@ if menu == "📝 전자결재 (기안)":
         
         doc_title = st.text_input("문서 제목")
         
-        # 🌟 2. 선택한 양식에 따라 템플릿 변경 (공문서 및 보고서 서식 적용)
         if doc_type == "📝 공문형 기안문":
-            template = """(주) 호 성
-
-수신자: [수신 부서 또는 직책]
-(경유): 
-제  목: [여기에 제목을 한 번 더 입력하세요]
---------------------------------------------------
-1. 귀 부서의 노고에 감사드립니다.
-2. [기안의 배경 및 목적을 간략히 기재하세요.]
-3. 위와 관련하여 아래와 같이 업무를 추진하고자 하오니 검토 후 재가하여 주시기 바랍니다.
-
-                        - 아    래 -
-        
-가. 일시/기간: 
-나. 대상/장소: 
-다. 소요 예산: 
-라. 상세 내용: 
-        
-붙임  1. [첨부문서 1 이름] 1부.
-      2. [첨부문서 2 이름] 1부.  끝.
-
-                     (주) 호 성 대 표 이 사"""
-
+            template = "(주) 호 성\n\n수신자: [수신 부서 또는 직책]\n(경유): \n제  목: [여기에 제목을 한 번 더 입력하세요]\n--------------------------------------------------\n1. 귀 부서의 노고에 감사드립니다.\n2. [기안의 배경 및 목적을 간략히 기재하세요.]\n3. 위와 관련하여 아래와 같이 업무를 추진하고자 하오니 검토 후 재가하여 주시기 바랍니다.\n\n                        - 아    래 -\n        \n가. 일시/기간: \n나. 대상/장소: \n다. 소요 예산: \n라. 상세 내용: \n        \n붙임  1. [첨부문서 1 이름] 1부.\n      2. [첨부문서 2 이름] 1부.  끝.\n\n                     (주) 호 성 대 표 이 사"
         elif doc_type == "💰 지출 품의서":
-            template = """■ 청구 내역 (품목/공사명):\n\n■ 예상 비용 (VAT 포함):\n             원\n■ 결제 수단 (법인카드/계좌이체 등):\n\n■ 거래처 정보 (상호/연락처):\n\n■ 첨부(영수증/견적서) 유무:\n"""
-            
+            template = "■ 청구 내역 (품목/공사명):\n\n■ 예상 비용 (VAT 포함):\n             원\n■ 결제 수단 (법인카드/계좌이체 등):\n\n■ 거래처 정보 (상호/연락처):\n\n■ 첨부(영수증/견적서) 유무:\n"
         elif doc_type == "📊 표준 보고서":
-            template = """[ 📄 주 요 업 무  보 고 서 ]
-
-■ 보고 일자 : 202 년   월   일
-■ 보  고  자 : 소속          성명          (서명)
---------------------------------------------------
-1. 현황 및 배경
-   - [현재 상황이나 보고를 하게 된 배경을 요약]
-
-2. 주요 추진 내용 (또는 발생한 문제점)
-   - [핵심적인 업무 진행 상황이나 상세 내역 기술]
-   - 
-
-3. 향후 계획 (또는 개선 방안)
-   - [앞으로의 일정이나 문제 해결을 위한 구체적 방안 기술]
-   - 
-
-4. 건의 및 요청사항
-   - [결재권자의 지원이 필요한 부분이나 참고사항 기술]
-"""
+            template = "[ 📄 주 요 업 무  보 고 서 ]\n\n■ 보고 일자 : 202 년   월   일\n■ 보  고  자 : 소속          성명          (서명)\n--------------------------------------------------\n1. 현황 및 배경\n   - [현재 상황이나 보고를 하게 된 배경을 요약]\n\n2. 주요 추진 내용 (또는 발생한 문제점)\n   - [핵심적인 업무 진행 상황이나 상세 내역 기술]\n   - \n\n3. 향후 계획 (또는 개선 방안)\n   - [앞으로의 일정이나 문제 해결을 위한 구체적 방안 기술]\n   - \n\n4. 건의 및 요청사항\n   - [결재권자의 지원이 필요한 부분이나 참고사항 기술]\n"
             
-        # 💡 입력창 높이를 450으로 늘려 양식이 한눈에 보이게 함
         doc_content = st.text_area("상세 내용 작성", value=template, height=450)
         
         selected_approvers = st.multiselect(
@@ -123,7 +115,6 @@ if menu == "📝 전자결재 (기안)":
                 st.warning("⚠️ 문서 제목을 입력하고, 결재권자를 최소 1명 이상 지정해 주세요.")
             else:
                 approvers_str = ",".join(selected_approvers)
-                
                 type_prefix = doc_type.split(" ")[1] 
                 final_title = f"[{type_prefix}] {doc_title}"
                 
@@ -139,9 +130,11 @@ if menu == "📝 전자결재 (기안)":
                 
     # --- [탭 2] 사장님이 결재하는 화면 ---
     with tab_approve:
-        current_admin = st.selectbox("👤 현재 접속자 (테스트용 가상 로그인)", ["접속자 선택"] + admin_list)
+        # 🌟 가짜 로그인 창을 없애고, 진짜 로그인한 사람의 이름을 가져옵니다!
+        current_admin = st.session_state['username']
         
-        if current_admin != "접속자 선택":
+        # '직원'이 아니라 '관리자' 명단에 있는 사람일 때만 결재함을 보여줌
+        if current_admin in admin_list:
             st.write(f"반갑습니다, **{current_admin}**님! 결재 대기 문서를 확인합니다.")
             
             res = supabase.table("approvals").select("*").eq("status", "대기중").execute()
@@ -180,14 +173,13 @@ if menu == "📝 전자결재 (기안)":
                                     "approved_by": new_approved_by,
                                     "status": new_status
                                 }).eq("id", doc['id']).execute()
-                                
                                 st.rerun()
                         with col2:
                             if st.button("❌ 반려하기", key=f"rej_{doc['id']}"):
                                 supabase.table("approvals").update({"status": "반려됨"}).eq("id", doc['id']).execute()
                                 st.rerun()
         else:
-            st.info("결재 문서를 보려면 위에서 접속자 이름을 선택해 주세요.")
+            st.warning("🔒 결재 권한이 없습니다. (관리자 계정으로 로그인해 주세요)")
 
     # --- [탭 3] 결재 완료 문서 보관 및 출력 화면 ---
     with tab_archive:
@@ -202,7 +194,6 @@ if menu == "📝 전자결재 (기안)":
             for doc in completed_docs:
                 icon = "🟢" if "승인됨" in doc['status'] else "🔴"
                 with st.expander(f"{icon} {doc['title']} ({doc['status']}) - {doc['created_at'][:10]}"):
-                    
                     st.markdown(f"### 📋 {doc['title']}")
                     st.write(f"- **결재 상태:** {doc['status']}")
                     st.write(f"- **기안 일자:** {doc['created_at'][:10]}")
@@ -212,19 +203,8 @@ if menu == "📝 전자결재 (기안)":
                     st.write(f"**[상세 요청 내용]**")
                     st.info(doc['content'])
                     
-                    doc_text = f"""
-======================================
-         결 재 완 료 문 서
-======================================
-■ 기안 제목: {doc['title']}
-■ 기안 일자: {doc['created_at'][:10]}
-■ 결재 상태: {doc['status']}
-■ 지정 결재자: {doc['approvers']}
-■ 승인 완료자: {doc.get('approved_by', '없음')}
---------------------------------------
-{doc['content']}
-======================================
-"""
+                    doc_text = f"======================================\n         결 재 완 료 문 서\n======================================\n■ 기안 제목: {doc['title']}\n■ 기안 일자: {doc['created_at'][:10]}\n■ 결재 상태: {doc['status']}\n■ 지정 결재자: {doc['approvers']}\n■ 승인 완료자: {doc.get('approved_by', '없음')}\n--------------------------------------\n{doc['content']}\n======================================"
+                    
                     st.download_button(
                         label="💾 문서 다운로드 (인쇄/보관용)",
                         data=doc_text,
@@ -235,7 +215,6 @@ if menu == "📝 전자결재 (기안)":
                     st.caption("💡 팁: 다운로드한 텍스트 파일을 열어 인쇄(Ctrl+P)를 통해 PDF로 변환하거나, 기기에 보관하실 수 있습니다.")
 
     st.stop()
-
 # ==========================================
 # [메뉴 3] 재고/물류 관리 (ERP) 화면
 # ==========================================
