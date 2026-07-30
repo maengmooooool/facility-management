@@ -13,7 +13,7 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-# --- 2. 화면 및 폰트 설정 ---
+# --- 2. 화면 및 폰트 설정 (모바일에 최적화된 14px) ---
 st.set_page_config(page_title="(주)호성 통합시스템", layout="wide")
 
 st.markdown("""
@@ -21,7 +21,7 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap');
 html, body, [class*="css"]  {
     font-family: 'Nanum Gothic', sans-serif !important;
-    font-size: 14px !important; /* 🌟 기존 18px에서 14px로 두 단계 낮춤 */
+    font-size: 14px !important; 
 }
 </style>
 """, unsafe_allow_html=True)
@@ -35,7 +35,6 @@ if 'logged_in' not in st.session_state:
     st.session_state['username'] = None
 
 if not st.session_state['logged_in']:
-    # 🌟 로그인 화면 글자 크기 축소
     st.subheader("🔐 (주)호성 통합시스템 로그인")
     
     col1, col2 = st.columns([1, 2])
@@ -84,9 +83,13 @@ if menu == "⚙️ 기계설비 관리":
     equip_names = sorted(list(set([row['name'] for row in equip_data]))) if equip_data else ["등록된 설비 없음"]
     existing_locations = sorted(list(set([row['location'] for row in equip_data if row.get('location')]))) if equip_data else []
     
+    # --- [탭 1] 설비 등록 및 현황 ---
     with tab_equip:
         st.write("신규 설비를 등록하고 현재 상태를 확인합니다.")
         with st.expander("➕ 신규 설비 등록하기", expanded=False):
+            # 🌟 사용자가 직접 등록일(설치일)을 선택할 수 있는 기능 추가
+            install_date = st.date_input("설비 등록일 (설치일)", date.today())
+            
             loc_choice = st.selectbox("설치 위치 및 공정 선택", ["직접 새 위치 입력하기"] + existing_locations)
             if loc_choice == "직접 새 위치 입력하기":
                 final_location = st.text_input("새로운 설치 위치/공정 입력")
@@ -102,8 +105,12 @@ if menu == "⚙️ 기계설비 관리":
                 if equip_name and final_location:
                     photo_name = equip_photo.name if equip_photo else "사진 없음"
                     supabase.table("equipment").insert({
-                        "name": equip_name, "location": final_location, "status": status,
-                        "cost": equip_cost, "photo": photo_name
+                        "name": equip_name, 
+                        "location": final_location, 
+                        "status": status,
+                        "cost": equip_cost,
+                        "photo": photo_name,
+                        "install_date": str(install_date) # 🌟 지정한 등록일 저장
                     }).execute()
                     st.success(f"✅ [{equip_name}] 등록 완료!")
                     st.rerun()
@@ -111,14 +118,19 @@ if menu == "⚙️ 기계설비 관리":
                     st.warning("설비명과 위치를 모두 입력해 주세요.")
                 
         st.markdown("---")
-        st.write("📋 **등록된 기계 설비 목록**")
+        st.write("📋 **등록된 기계 설비 목록 (첨부 사진 포함)**")
         if equip_data:
             df_equip = pd.DataFrame(equip_data)
-            df_equip_display = df_equip[['created_at', 'name', 'location', 'cost', 'status', 'photo']].sort_values(by='created_at', ascending=False)
-            df_equip_display.columns = ['등록일', '설비명', '위치/공정', '취득금액(원)', '상태', '사진첨부여부']
-            df_equip_display['등록일'] = df_equip_display['등록일'].apply(lambda x: x[:10])
+            # 사용자가 지정한 install_date가 있으면 우선 표시, 없으면 기존 생성일자 사용
+            if 'install_date' not in df_equip.columns:
+                df_equip['install_date'] = df_equip['created_at'].apply(lambda x: x[:10])
+            df_equip['install_date'] = df_equip['install_date'].fillna(df_equip['created_at'].apply(lambda x: x[:10]))
+            
+            df_equip_display = df_equip[['install_date', 'name', 'location', 'cost', 'status', 'photo']].sort_values(by='install_date', ascending=False)
+            df_equip_display.columns = ['등록일', '설비명', '위치/공정', '취득금액(원)', '상태', '첨부사진명']
             st.dataframe(df_equip_display, use_container_width=True, hide_index=True)
             
+    # --- [탭 2] 점검 내역 관리 ---
     with tab_inspect:
         st.write("설비의 정기/수시 점검 내역을 기록합니다.")
         with st.form("inspect_form"):
@@ -129,15 +141,21 @@ if menu == "⚙️ 기계설비 관리":
                 st.success("✅ 점검 내역이 저장되었습니다.")
                 st.rerun()
                 
-        st.write("📋 **최근 점검 기록 목록**")
+        st.write("📋 **최근 점검 기록 목록 (설비 사진 정보 연동)**")
         res_ins = supabase.table("inspections").select("*").execute()
         if res_ins.data:
             df_ins = pd.DataFrame(res_ins.data)
-            df_ins_display = df_ins[['created_at', 'equipment_name', 'detail']].sort_values(by='created_at', ascending=False)
-            df_ins_display.columns = ['점검일자', '설비명', '점검내역']
+            # 설비별 사진 정보를 매칭하기 위해 equipment 테이블과 병합
+            df_eq_info = pd.DataFrame(equip_data)[['name', 'photo']] if equip_data else pd.DataFrame(columns=['name', 'photo'])
+            df_ins_merged = pd.merge(df_ins, df_eq_info, left_on='equipment_name', right_on='name', how='left')
+            
+            df_ins_display = df_ins_merged[['created_at', 'equipment_name', 'detail', 'photo']].sort_values(by='created_at', ascending=False)
+            df_ins_display.columns = ['점검일자', '설비명', '점검내역', '설비사진명']
             df_ins_display['점검일자'] = df_ins_display['점검일자'].apply(lambda x: x[:10])
+            df_ins_display['설비사진명'] = df_ins_display['설비사진명'].fillna('사진 없음')
             st.dataframe(df_ins_display, use_container_width=True, hide_index=True)
 
+    # --- [탭 3] 부품 교체 관리 ---
     with tab_parts:
         st.write("부품 교체 및 수리 내역을 등록합니다.")
         res_parts = supabase.table("parts").select("*").execute()
@@ -168,18 +186,30 @@ if menu == "⚙️ 기계설비 관리":
                 st.success("✅ 부품 교체 내역이 저장되었습니다.")
                 st.rerun()
 
-        st.write("📋 **최근 부품 교체 기록 목록**")
+        st.write("📋 **최근 부품 교체 기록 목록 (설비 사진 정보 연동)**")
         if parts_data:
             df_pts = pd.DataFrame(parts_data)
-            df_pts_display = df_pts[['created_at', 'equipment_name', 'part_name', 'quantity', 'total_cost']].sort_values(by='created_at', ascending=False)
-            df_pts_display.columns = ['교체일자', '설비명', '교체부품명', '수량', '합계금액(원)']
+            df_eq_info = pd.DataFrame(equip_data)[['name', 'photo']] if equip_data else pd.DataFrame(columns=['name', 'photo'])
+            df_pts_merged = pd.merge(df_pts, df_eq_info, left_on='equipment_name', right_on='name', how='left')
+            
+            df_pts_display = df_pts_merged[['created_at', 'equipment_name', 'part_name', 'quantity', 'total_cost', 'photo']].sort_values(by='created_at', ascending=False)
+            df_pts_display.columns = ['교체일자', '설비명', '교체부품명', '수량', '합계금액(원)', '설비사진명']
             df_pts_display['교체일자'] = df_pts_display['교체일자'].apply(lambda x: x[:10])
+            df_pts_display['설비사진명'] = df_pts_display['설비사진명'].fillna('사진 없음')
             st.dataframe(df_pts_display, use_container_width=True, hide_index=True)
 
+    # --- [탭 4] 이력 조회 및 데이터 관리 ---
     with tab_data:
         st.write("특정 설비의 이력을 날짜별로 조회하거나 데이터를 관리(수정/삭제/CSV)합니다.")
-        st.subheader("🔎 특정 설비 이력 조회")
+        st.subheader("🔎 특정 설비 이력 조회 (사진 및 상세 내역)")
         search_target = st.selectbox("이력을 조회할 설비를 선택하세요", equip_names, key="search_eq")
+        
+        # 선택한 설비의 등록 사진 정보 먼저 보여주기
+        if equip_data:
+            matched_eq = [eq for eq in equip_data if eq['name'] == search_target]
+            if matched_eq:
+                eq_info = matched_eq[0]
+                st.info(f"📌 **[{search_target}]** 기본 정보 | 위치: {eq_info.get('location', '-')} | 상태: {eq_info.get('status', '-')} | 등록 사진명: **{eq_info.get('photo', '사진 없음')}**")
         
         if parts_data:
             df_all_parts = pd.DataFrame(parts_data)
@@ -187,7 +217,7 @@ if menu == "⚙️ 기계설비 관리":
             if not filtered_df.empty:
                 filtered_df = filtered_df.sort_values(by='created_at', ascending=False)
                 disp_df = filtered_df[['created_at', 'part_name', 'quantity', 'total_cost', 'detail']]
-                disp_df.columns = ['교체일자', '부품명', '수량', '비용', '특이사항']
+                disp_df.columns = ['교체일자', '부품명', '수량', '비용(원)', '특이사항']
                 disp_df['교체일자'] = disp_df['교체일자'].apply(lambda x: x[:10])
                 st.dataframe(disp_df, use_container_width=True, hide_index=True)
             else:
