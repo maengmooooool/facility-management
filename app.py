@@ -343,7 +343,7 @@ elif menu == "📝 전자결재 (기안)":
     st.subheader("📝 사내 전자결재 시스템")
     
     tab_draft, tab_approve, tab_archive = st.tabs(["📝 기안 작성", "✅ 결재함 (관리자용)", "🗄️ 결재 완료 문서함"])
-    admin_list = ["김공장장", "이이사", "박대표", "최팀장"]
+    admin_list = ["기계실팀장", "이사", "관리이사", "대표"]
     
     with tab_draft:
         st.write("문서 양식을 선택한 후, 빈칸을 채워 결재를 상신해 주세요.")
