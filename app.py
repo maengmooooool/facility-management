@@ -221,70 +221,105 @@ if menu == "📝 전자결재 (기안)":
 elif menu == "📦 물류 및 재고 (ERP)":
     st.title("📦 실시간 재고/물류 관리")
     
-    # 탭을 나누어 입력 화면과 대시보드(통계) 화면을 분리합니다.
     tab_input, tab_dashboard = st.tabs(["🚛 물류 입출고 등록", "📊 실시간 재고 대시보드"])
     
     # --- [탭 1] 입출고 등록 화면 ---
     with tab_input:
-        st.write("오늘의 입출고 내역(톤 단위)을 정확히 기록해 주세요.")
+        st.write("입고, 출고, 사용 내역과 단위를 정확히 기록해 주세요.")
         
         with st.form("inventory_form"):
             col1, col2 = st.columns(2)
             with col1:
-                # 취급하시는 주요 품목을 리스트에 넣습니다.
-                item_type = st.selectbox("품목 선택", ["고철", "폐목재", "비철", "기타"])
-                in_out = st.radio("물류 구분", ["입고", "출고"], horizontal=True)
+                # 🌟 1. 날짜 선택 기능 추가
+                log_date = st.date_input("일시 (날짜 선택)", date.today())
+                
+                item_list = [
+                    "골재(1등급 25mm)", "골재(25mm)", "골재(1등급 20mm)", 
+                    "골재(20mm)", "골재(1등급 13mm)", "골재(13mm)", 
+                    "골재(잔골재 No4)", "아스팔트(스트레이트)", "아스팔트(개질)"
+                ]
+                item_type = st.selectbox("품목 선택", item_list)
+                
+                # 🌟 2. '사용' 구분 추가
+                in_out = st.radio("물류 구분", ["입고", "출고", "사용"], horizontal=True)
+                
             with col2:
-                weight = st.number_input("수량 (단위: 톤)", min_value=0.0, step=0.1, format="%.1f")
+                # 🌟 3. 부피 및 무게 단위 선택 추가
+                unit = st.selectbox("단위 선택", ["톤(t)", "m³ (루베)", "L (리터)"])
+                quantity = st.number_input("수량", min_value=0.0, step=0.1, format="%.1f")
                 
             submitted = st.form_submit_button("저장하기")
             
             if submitted:
-                if weight <= 0:
+                if quantity <= 0:
                     st.warning("⚠️ 0보다 큰 수량을 입력해 주세요.")
                 else:
+                    # Supabase에 저장 (기존 weight 칸에 수량을 저장합니다)
                     data = {
+                        "log_date": str(log_date),
                         "item_type": item_type,
                         "in_out": in_out,
-                        "weight": weight
+                        "unit": unit,
+                        "weight": quantity 
                     }
                     supabase.table("inventory").insert(data).execute()
-                    st.success(f"✅ [{item_type}] {weight}톤 {in_out} 기록이 저장되었습니다!")
+                    st.success(f"✅ {log_date} | [{item_type}] {quantity} {unit} - {in_out} 기록이 저장되었습니다!")
                     
     # --- [탭 2] 재고 대시보드 화면 ---
     with tab_dashboard:
-        st.write("현재까지 누적된 품목별 재고 현황입니다.")
+        st.write("현재까지 누적된 품목별 재고 현황 및 변화 트렌드입니다.")
         
-        # 데이터베이스에서 모든 입출고 내역 불러오기
         res = supabase.table("inventory").select("*").execute()
         inv_data = res.data
         
         if not inv_data:
             st.info("아직 등록된 물류 내역이 없습니다.")
         else:
-            # 불러온 데이터를 엑셀(데이터프레임) 형태로 변환
             df = pd.DataFrame(inv_data)
             
-            # 입고는 더하고(+) 출고는 빼서(-) 현재 재고 계산하기
-            df['calc_weight'] = df.apply(lambda x: x['weight'] if x['in_out'] == '입고' else -x['weight'], axis=1)
+            # 과거 데이터 호환성 처리 (이전에 단위나 날짜 없이 저장된 데이터 빈칸 채우기)
+            if 'unit' not in df.columns: df['unit'] = '톤(t)'
+            df['unit'] = df['unit'].fillna('톤(t)')
             
-            # 품목별로 그룹을 묶어서 총합 계산
-            inventory_summary = df.groupby('item_type')['calc_weight'].sum().reset_index()
-            inventory_summary.columns = ['품목명', '현재 재고(톤)']
+            if 'log_date' not in df.columns: df['log_date'] = df['created_at'].apply(lambda x: x[:10])
+            df['log_date'] = df['log_date'].fillna(df['created_at'].apply(lambda x: x[:10]))
             
-            # 🌟 화면에 시각적으로 예쁘게 표시하기
-            cols = st.columns(len(inventory_summary))
+            # 입고는 더하기(+), 출고와 사용은 빼기(-)로 계산
+            df['calc_qty'] = df.apply(lambda x: x['weight'] if x['in_out'] == '입고' else -x['weight'], axis=1)
+            
+            # 품목별/단위별 재고 요약 계산
+            inventory_summary = df.groupby(['item_type', 'unit'])['calc_qty'].sum().reset_index()
+            inventory_summary.columns = ['품목명', '단위', '현재 재고']
+            
+            # 🌟 [화면 1] 상단: 현재 재고 요약 표시 (3칸씩)
+            cols = st.columns(3)
             for i, row in inventory_summary.iterrows():
-                with cols[i]:
-                    st.metric(label=f"📦 {row['품목명']}", value=f"{row['현재 재고(톤)']:.1f} t")
+                with cols[i % 3]:
+                    st.metric(label=f"📦 {row['품목명']}", value=f"{row['현재 재고']:.1f} {row['단위']}")
             
             st.markdown("---")
-            st.write("📋 **상세 입출고 기록 (최근 순)**")
-            # 보기 좋게 정렬 및 표시
-            df_display = df[['created_at', 'item_type', 'in_out', 'weight']].sort_values(by='created_at', ascending=False)
-            df_display.columns = ['일시', '품목', '구분', '수량(톤)']
-            # 시간 부분 깔끔하게 자르기 (예: 2026-07-30)
-            df_display['일시'] = df_display['일시'].apply(lambda x: x[:10]) 
+            
+            # 🌟 [화면 2] 중단: 품목별 재고 트렌드 그래프 추가
+            st.write("📈 **품목별 누적 재고 트렌드**")
+            
+            # 날짜별 누적 재고를 계산하여 그래프 그리기
+            daily_changes = df.groupby(['log_date', 'item_type'])['calc_qty'].sum().reset_index()
+            pivot_df = daily_changes.pivot(index='log_date', columns='item_type', values='calc_qty').fillna(0)
+            trend_df = pivot_df.cumsum() # 누적 합계 계산
+            
+            st.line_chart(trend_df)
+            
+            st.markdown("---")
+            
+            # 🌟 [화면 3] 하단: 상세 기록 표
+            st.write("📋 **상세 입출고/사용 기록 (최근 순)**")
+            
+            df_display = df[['log_date', 'item_type', 'in_out', 'weight', 'unit']].sort_values(by='log_date', ascending=False)
+            df_display.columns = ['일시', '품목', '구분', '수량', '단위']
+            
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+    st.stop()
             
             st.dataframe(df_display, use_container_width=True, hide_index=True)
 
