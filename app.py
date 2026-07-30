@@ -78,66 +78,184 @@ with st.sidebar:
 if menu == "⚙️ 기계설비 관리":
     st.title("⚙️ 기계설비 및 유지보수 관리")
     
-    tab_equip, tab_parts = st.tabs(["🚜 기계 설비 현황", "🔩 수리 및 부품 내역"])
+    # 탭을 4개로 세분화하여 전문적으로 구성
+    tab_equip, tab_inspect, tab_parts, tab_data = st.tabs(["🚜 설비 등록 및 현황", "🔍 점검 내역 관리", "🔩 부품 교체 관리", "📊 이력 조회 및 데이터 관리"])
     
-    # --- [탭 1] 설비 현황 ---
+    # --- DB에서 기존 데이터 불러오기 (드롭다운 용도) ---
+    res_equip = supabase.table("equipment").select("*").execute()
+    equip_data = res_equip.data if res_equip.data else []
+    
+    # 🌟 등록된 설비명 가나다순 정렬 (중복 제거)
+    equip_names = sorted(list(set([row['name'] for row in equip_data]))) if equip_data else ["등록된 설비 없음"]
+    
+    # 🌟 등록된 위치 가나다순 정렬 (중복 제거)
+    existing_locations = sorted(list(set([row['location'] for row in equip_data if row.get('location')]))) if equip_data else []
+    
+    # --- [탭 1] 설비 등록 및 현황 ---
     with tab_equip:
-        st.write("공장 내 주요 기계 설비를 등록하고 상태를 관리합니다.")
+        st.write("신규 설비를 등록하고 현재 상태를 확인합니다.")
         
-        with st.form("equip_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                equip_name = st.text_input("설비명 (예: 1호기 파쇄기)")
-                location = st.text_input("설치 위치 (예: A동 작업장)")
-            with col2:
-                status = st.selectbox("현재 상태", ["🟢 정상 가동", "🟡 점검 요망", "🔴 수리 중"])
+        with st.expander("➕ 신규 설비 등록하기", expanded=False):
+            # 🌟 팝업(드롭다운)에서 기존 위치를 고르거나 새 위치를 직접 입력할 수 있게 함
+            loc_choice = st.selectbox("설치 위치 및 공정 선택", ["직접 새 위치 입력하기"] + existing_locations)
+            if loc_choice == "직접 새 위치 입력하기":
+                final_location = st.text_input("새로운 설치 위치/공정 입력")
+            else:
+                final_location = loc_choice
+                
+            equip_name = st.text_input("설비명 (예: 1호기 파쇄기)")
+            equip_cost = st.number_input("취득금액 (원)", min_value=0, step=10000)
+            status = st.selectbox("현재 상태", ["🟢 정상 가동", "🟡 점검 요망", "🔴 수리 중"])
             
-            submit_equip = st.form_submit_button("설비 등록하기")
+            # 🌟 사진 첨부 기능 (스트림릿 임시 저장)
+            equip_photo = st.file_uploader("설비 사진 첨부 (옵션)", type=["jpg", "png", "jpeg"])
             
-            if submit_equip and equip_name:
-                supabase.table("equipment").insert({
-                    "name": equip_name, 
-                    "location": location, 
-                    "status": status
-                }).execute()
-                st.success(f"✅ {equip_name} 등록 완료!")
-                st.rerun()
+            if st.button("신규 설비 등록 저장"):
+                if equip_name and final_location:
+                    photo_name = equip_photo.name if equip_photo else "사진 없음"
+                    supabase.table("equipment").insert({
+                        "name": equip_name, 
+                        "location": final_location, 
+                        "status": status,
+                        "cost": equip_cost,
+                        "photo": photo_name
+                    }).execute()
+                    st.success(f"✅ [{equip_name}] 등록 완료!")
+                    st.rerun()
+                else:
+                    st.warning("설비명과 위치를 모두 입력해 주세요.")
                 
         st.markdown("---")
         st.write("📋 **등록된 기계 설비 목록**")
-        res_equip = supabase.table("equipment").select("*").execute()
-        if res_equip.data:
-            df_equip = pd.DataFrame(res_equip.data)
-            df_equip = df_equip[['created_at', 'name', 'location', 'status']].sort_values(by='created_at', ascending=False)
-            df_equip.columns = ['등록일', '설비명', '위치', '상태']
-            df_equip['등록일'] = df_equip['등록일'].apply(lambda x: x[:10])
-            st.dataframe(df_equip, use_container_width=True, hide_index=True)
+        if equip_data:
+            df_equip = pd.DataFrame(equip_data)
+            # 관리번호(id)를 제외하고 출력
+            df_equip_display = df_equip[['created_at', 'name', 'location', 'cost', 'status', 'photo']].sort_values(by='created_at', ascending=False)
+            df_equip_display.columns = ['등록일', '설비명', '위치/공정', '취득금액(원)', '상태', '사진첨부여부']
+            df_equip_display['등록일'] = df_equip_display['등록일'].apply(lambda x: x[:10])
+            st.dataframe(df_equip_display, use_container_width=True, hide_index=True)
             
-    # --- [탭 2] 수리 및 부품 내역 ---
-    with tab_parts:
-        st.write("설비의 고장 수리 내역이나 부품 교체 이력을 기록합니다.")
+    # --- [탭 2] 점검 내역 관리 ---
+    with tab_inspect:
+        st.write("설비의 정기/수시 점검 내역을 기록합니다.")
         
-        # 등록된 설비 이름 불러오기
-        res_equip_list = supabase.table("equipment").select("name").execute()
-        equip_names = [item['name'] for item in res_equip_list.data] if res_equip_list.data else ["등록된 설비 없음"]
-        
-        with st.form("parts_form"):
-            target_equip = st.selectbox("수리/점검한 설비 선택", equip_names)
-            issue_detail = st.text_area("수리 및 부품 교체 상세 내용")
-            cost = st.number_input("수리 비용 (원)", min_value=0, step=10000)
+        with st.form("inspect_form"):
+            target_equip_ins = st.selectbox("점검한 설비 선택", equip_names)
+            inspect_detail = st.text_area("점검 상세 내역 및 조치사항")
             
-            submit_parts = st.form_submit_button("수리 내역 저장")
-            
-            if submit_parts and target_equip != "등록된 설비 없음":
-                supabase.table("parts").insert({
-                    "equipment_name": target_equip,
-                    "detail": issue_detail,
-                    "cost": cost
+            if st.form_submit_button("점검 내역 저장") and target_equip_ins != "등록된 설비 없음":
+                supabase.table("inspections").insert({
+                    "equipment_name": target_equip_ins,
+                    "detail": inspect_detail
                 }).execute()
-                st.success("✅ 수리 내역이 저장되었습니다.")
+                st.success("✅ 점검 내역이 저장되었습니다.")
+                st.rerun()
+                
+        st.write("📋 **최근 점검 기록 목록**")
+        res_ins = supabase.table("inspections").select("*").execute()
+        if res_ins.data:
+            df_ins = pd.DataFrame(res_ins.data)
+            df_ins_display = df_ins[['created_at', 'equipment_name', 'detail']].sort_values(by='created_at', ascending=False)
+            df_ins_display.columns = ['점검일자', '설비명', '점검내역']
+            df_ins_display['점검일자'] = df_ins_display['점검일자'].apply(lambda x: x[:10])
+            st.dataframe(df_ins_display, use_container_width=True, hide_index=True) # 🌟 관리번호 숨김
+
+    # --- [탭 3] 부품 교체 관리 ---
+    with tab_parts:
+        st.write("부품 교체 및 수리 내역을 등록합니다.")
+        
+        # 기존 부품명 불러오기
+        res_parts = supabase.table("parts").select("*").execute()
+        parts_data = res_parts.data if res_parts.data else []
+        existing_parts = sorted(list(set([row['part_name'] for row in parts_data if row.get('part_name')]))) if parts_data else []
+        
+        # 🌟 자동 계산을 위해 form을 쓰지 않고 실시간 반응형으로 구성
+        target_equip_part = st.selectbox("부품을 교체한 설비 선택", equip_names)
+        
+        part_choice = st.selectbox("교체 부품명 선택", ["직접 새 부품명 입력하기"] + existing_parts)
+        if part_choice == "직접 새 부품명 입력하기":
+            final_part_name = st.text_input("새로운 부품명 입력")
+        else:
+            final_part_name = part_choice
+            
+        col_q, col_p, col_t = st.columns(3)
+        with col_q:
+            part_qty = st.number_input("교체 수량", min_value=1, step=1, value=1)
+        with col_p:
+            part_price = st.number_input("부품 단가 (원)", min_value=0, step=1000)
+            
+        # 🌟 수량과 단가를 곱하여 합계 자동 계산
+        total_price = part_qty * part_price
+        with col_t:
+            st.info(f"**자동 합계 금액:** {total_price:,} 원")
+            
+        part_detail = st.text_input("기타 특이사항 (선택)")
+        
+        if st.button("부품 교체 등록 저장"):
+            if target_equip_part != "등록된 설비 없음" and final_part_name:
+                supabase.table("parts").insert({
+                    "equipment_name": target_equip_part,
+                    "part_name": final_part_name,
+                    "quantity": part_qty,
+                    "unit_price": part_price,
+                    "total_cost": total_price,
+                    "detail": part_detail
+                }).execute()
+                st.success("✅ 부품 교체 내역이 저장되었습니다.")
                 st.rerun()
 
-    st.stop() # 👈 메뉴 1 화면 그리기 종료
+        st.write("📋 **최근 부품 교체 기록 목록**")
+        if parts_data:
+            df_pts = pd.DataFrame(parts_data)
+            df_pts_display = df_pts[['created_at', 'equipment_name', 'part_name', 'quantity', 'total_cost']].sort_values(by='created_at', ascending=False)
+            df_pts_display.columns = ['교체일자', '설비명', '교체부품명', '수량', '합계금액(원)']
+            df_pts_display['교체일자'] = df_pts_display['교체일자'].apply(lambda x: x[:10])
+            st.dataframe(df_pts_display, use_container_width=True, hide_index=True) # 🌟 관리번호 숨김
+
+    # --- [탭 4] 이력 조회 및 CSV 데이터 관리 ---
+    with tab_data:
+        st.write("특정 설비의 이력을 날짜별로 조회하거나 데이터를 관리(수정/삭제/CSV)합니다.")
+        
+        st.subheader("🔎 특정 설비 이력 조회")
+        search_target = st.selectbox("이력을 조회할 설비를 선택하세요", equip_names, key="search_eq")
+        
+        if parts_data:
+            df_all_parts = pd.DataFrame(parts_data)
+            # 선택한 설비의 이력만 필터링
+            filtered_df = df_all_parts[df_all_parts['equipment_name'] == search_target]
+            if not filtered_df.empty:
+                filtered_df = filtered_df.sort_values(by='created_at', ascending=False)
+                # 표시용 컬럼 정리 (id 제외)
+                disp_df = filtered_df[['created_at', 'part_name', 'quantity', 'total_cost', 'detail']]
+                disp_df.columns = ['교체일자', '부품명', '수량', '비용', '특이사항']
+                disp_df['교체일자'] = disp_df['교체일자'].apply(lambda x: x[:10])
+                st.dataframe(disp_df, use_container_width=True, hide_index=True)
+            else:
+                st.info(f"'{search_target}'의 부품 교체 이력이 없습니다.")
+                
+        st.markdown("---")
+        st.subheader("💾 CSV 내보내기 및 데이터 삭제")
+        st.write("데이터를 엑셀(CSV)로 다운로드하거나, 잘못 입력된 데이터를 ID(관리번호)를 통해 삭제할 수 있습니다.")
+        
+        col_down, col_del = st.columns(2)
+        with col_down:
+            if parts_data:
+                # CSV로 변환 (UTF-8 인코딩)
+                csv = df_all_parts.to_csv(index=False).encode('utf-8-sig')
+                st.download_button(
+                    label="📥 전체 부품 교체 내역 CSV 다운로드",
+                    data=csv,
+                    file_name='parts_history.csv',
+                    mime='text/csv',
+                )
+        with col_del:
+            # 삭제를 위해서는 화면에서 숨겼던 관리번호(id)가 필요하므로 여기서만 별도로 입력받음
+            delete_id = st.number_input("삭제할 데이터의 고유 ID 번호", min_value=0, step=1)
+            if st.button("해당 ID 데이터 완전히 삭제"):
+                if delete_id > 0:
+                    supabase.table("parts").delete().eq("id", delete_id).execute()
+                    st.success(f"ID {delete_id}번 데이터가 성공적으로 삭제되었습니다.")
+                    st.rerun()
 # ==========================================
 # [메뉴 2] 전자결재 시스템 화면
 # ==========================================
