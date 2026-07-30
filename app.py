@@ -2,6 +2,7 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 from datetime import date, datetime, timedelta
+import os
 import time
 
 # --- 1. Supabase 클라우드 데이터베이스 연결 ---
@@ -83,14 +84,33 @@ if menu == "⚙️ 기계설비 관리":
     equip_names = sorted(list(set([row['name'] for row in equip_data]))) if equip_data else ["등록된 설비 없음"]
     existing_locations = sorted(list(set([row['location'] for row in equip_data if row.get('location')]))) if equip_data else []
     
-    # 설비별 사진 URL 매핑
     equip_photo_map = {row['name']: row.get('photo', '사진 없음') for row in equip_data} if equip_data else {}
     
-    # 🌟 DB에 저장된 영구 이미지 URL을 불러와 화면에 출력하는 함수
+    # 🌟 이미지 URL 혹은 기존 파일명을 유연하게 처리하여 화면에 띄워주는 함수
     def render_equipment_photo(eq_name, width=300):
-        photo_url = equip_photo_map.get(eq_name, "사진 없음")
-        if photo_url and photo_url.startswith("http"):
-            st.image(photo_url, caption=f"{eq_name} 사진", width=width)
+        photo_val = equip_photo_map.get(eq_name, "사진 없음")
+        if photo_val and photo_val != "사진 없음":
+            if photo_val.startswith("http"):
+                st.image(photo_val, caption=f"{eq_name} 사진", width=width)
+            elif os.path.exists(photo_val):
+                st.image(photo_val, caption=f"{eq_name} 사진", width=width)
+            else:
+                # 파일 이름만 저장되어 있는 경우, 여기서 바로 파일을 업로드하면 앞으로 영구 저장됩니다!
+                upl = st.file_uploader(f"[{eq_name}] 기존 파일명('{photo_val}')에 해당하는 사진을 선택해 주세요 (최초 1회)", type=["jpg", "png", "jpeg"], key=f"fix_photo_{eq_name}")
+                if upl is not None:
+                    file_bytes = upl.getvalue()
+                    file_path = f"{int(time.time())}_{upl.name}"
+                    try:
+                        supabase.storage.from_("equipment-photos").upload(file_path, file_bytes)
+                        res_url = supabase.storage.from_("equipment-photos").get_public_url(file_path)
+                        # DB 업데이트
+                        match_row = [r for r in equip_data if r['name'] == eq_name]
+                        if match_row:
+                            supabase.table("equipment").update({"photo": res_url}).eq("id", match_row[0]['id']).execute()
+                        st.success("✅ 사진이 영구 저장되었습니다! 화면을 새로고침합니다.")
+                        st.rerun()
+                    except Exception as e:
+                        st.image(upl, caption=f"{eq_name} 사진", width=width)
         else:
             st.info(f"💡 등록된 설비 사진이 없습니다. (설비 등록 및 현황에서 사진을 첨부해 주세요)")
 
@@ -146,7 +166,6 @@ if menu == "⚙️ 기계설비 관리":
             df_equip_display.columns = ['등록일', '설비명', '위치/공정', '취득금액(원)', '상태']
             st.dataframe(df_equip_display, use_container_width=True, hide_index=True)
 
-        # 🌟 [신규 기능] 등록된 설비 정보 수정 및 삭제 기능
         st.markdown("---")
         st.subheader("🛠️ 등록된 설비 정보 수정 및 삭제")
         if equip_data:
@@ -468,7 +487,7 @@ elif menu == "📦 물류 및 재고 (ERP)":
             cols = st.columns(3)
             for i, row in inventory_summary.iterrows():
                 with cols[i % 3]:
-                    st.metric(label=f"📦 {row['품목명']}", value=f"{row['현재 재고']:.1f} {row['단위']}")
+                    st.metric(label=f"📦 {row['품목명']}", value=f"{row['현재 Re-']:.1f} {row['단위']}" if '현재 Re-' in row else f"📦 {row['품목명']}", value=f"{row['현재 재고']:.1f} {row['단위']}")
             
             st.markdown("---")
             st.write("📈 **품목별 누적 재고 트렌드**")
