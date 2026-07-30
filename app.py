@@ -135,12 +135,12 @@ if menu == "⚙️ 기계설비 관리":
         
         target_equip_ins = st.selectbox("점검한 설비 선택", equip_names, key="inspect_eq_target")
         
-        # 선택한 설비의 사진 미리보기 (파일명 텍스트 문구 제거)
+        # 점검 내역 관리 화면 사진 크기 통일 (width=300)
         if equip_data and target_equip_ins != "등록된 설비 없음":
             matched_eq = [eq for eq in equip_data if eq['name'] == target_equip_ins]
             if matched_eq and matched_eq[0].get('photo') and matched_eq[0].get('photo') != "사진 없음":
                 if 'equip_photo' in locals() and equip_photo is not None:
-                    st.image(equip_photo, caption=f"{target_equip_ins} 사진", width=250)
+                    st.image(equip_photo, caption=f"{target_equip_ins} 사진", width=300)
 
         with st.form("inspect_form"):
             inspect_date = st.date_input("점검 일자", date.today())
@@ -177,12 +177,12 @@ if menu == "⚙️ 기계설비 관리":
         
         target_equip_part = st.selectbox("부품을 교체한 설비 선택", equip_names, key="part_eq_select")
         
-        # 선택한 설비의 사진 미리보기 (파일명 텍스트 문구 제거)
+        # 부품 교체 관리 화면 사진 크기 통일 (width=300)
         if equip_data and target_equip_part != "등록된 설비 없음":
             matched_eq_p = [eq for eq in equip_data if eq['name'] == target_equip_part]
             if matched_eq_p and matched_eq_p[0].get('photo') and matched_eq_p[0].get('photo') != "사진 없음":
                 if 'equip_photo' in locals() and equip_photo is not None:
-                    st.image(equip_photo, caption=f"{target_equip_part} 사진", width=250)
+                    st.image(equip_photo, caption=f"{target_equip_part} 사진", width=300)
 
         replace_date = st.date_input("부품 교체 일자", date.today(), key="rep_date")
         
@@ -226,18 +226,16 @@ if menu == "⚙️ 기계설비 관리":
     with tab_data:
         st.write("특정 설비의 이력을 날짜별로 조회하거나 데이터를 관리(수정/삭제/CSV)합니다.")
         
-        # 🌟 이력 조회 화면 좌측 상단(설비 선택 바로 아래)에 기존 등록 사진 고정 출력
         search_target = st.selectbox("이력을 조회할 설비를 선택하세요", equip_names, key="search_eq")
         
+        # 이력 조회 화면 사진 크기 통일 (width=300)
         if equip_data and search_target != "등록된 설비 없음":
             matched_eq = [eq for eq in equip_data if eq['name'] == search_target]
             if matched_eq:
                 eq_info = matched_eq[0]
-                # 만약 방금 올린 사진이 있거나 하면 우선 표시, 기존 업로드 파일 미리보기 공간 마련
                 if 'equip_photo' in locals() and equip_photo is not None:
                     st.image(equip_photo, caption=f"{search_target} 사진", width=300)
                 elif eq_info.get('photo') and eq_info.get('photo') != "사진 없음":
-                    # 기존 등록 사진이 있을 때 화면 좌측 상단에 고정 표시되도록 안내용 업로더 혹은 플레이스홀더 제공
                     re_upload_photo = st.file_uploader(f"[{search_target}] 등록된 사진 화면에 띄우기 (사진 파일 선택)", type=["jpg", "png", "jpeg"], key="re_photo")
                     if re_upload_photo is not None:
                         st.image(re_upload_photo, caption=search_target, width=300)
