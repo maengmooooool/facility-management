@@ -125,7 +125,6 @@ if menu == "⚙️ 기계설비 관리":
             df_equip_display.columns = ['등록일', '설비명', '위치/공정', '취득금액(원)', '상태', '첨부사진명']
             st.dataframe(df_equip_display, use_container_width=True, hide_index=True)
             
-            # 🌟 등록할 때 업로드한 실제 이미지가 있다면 화면에 직접 띄워주기
             if equip_photo is not None:
                 st.markdown("🖼️ **최근 업로드한 설비 사진 미리보기:**")
                 st.image(equip_photo, width=300)
@@ -134,9 +133,20 @@ if menu == "⚙️ 기계설비 관리":
     with tab_inspect:
         st.write("설비의 정기/수시 점검 내역을 기록합니다.")
         
+        # 🌟 점검 화면 상단에 선택한 설비의 사진을 미리 보여주기 위한 선택 장치 먼저 배치
+        target_equip_ins = st.selectbox("점검할 설비 선택", equip_names, key="inspect_eq_target")
+        
+        # 선택한 설비에 등록된 사진 파일명이 있다면 안내 및 미리보기 공간 제공
+        if equip_data and target_equip_ins != "등록된 설비 없음":
+            matched_eq = [eq for eq in equip_data if eq['name'] == target_equip_ins]
+            if matched_eq and matched_eq[0].get('photo') and matched_eq[0].get('photo') != "사진 없음":
+                st.info(f"📌 현재 선택된 **[{target_equip_ins}]** 등록 사진 파일명: **{matched_eq[0].get('photo')}**")
+                # 만약 방금 업로드한 파일 객체가 있다면 이미지 출력
+                if 'equip_photo' in locals() and equip_photo is not None:
+                    st.image(equip_photo, caption=f"{target_equip_ins} 사진", width=250)
+
         with st.form("inspect_form"):
             inspect_date = st.date_input("점검 일자", date.today())
-            target_equip_ins = st.selectbox("점검한 설비 선택", equip_names)
             inspect_detail = st.text_area("점검 상세 내역 및 조치사항")
             
             if st.form_submit_button("점검 내역 저장") and target_equip_ins != "등록된 설비 없음":
@@ -168,8 +178,17 @@ if menu == "⚙️ 기계설비 관리":
         parts_data = res_parts.data if res_parts.data else []
         existing_parts = sorted(list(set([row['part_name'] for row in parts_data if row.get('part_name')]))) if parts_data else []
         
-        replace_date = st.date_input("부품 교체 일자", date.today(), key="rep_date")
+        # 🌟 부품 교체 화면 상단에도 선택한 설비의 사진 정보 표시
         target_equip_part = st.selectbox("부품을 교체한 설비 선택", equip_names, key="part_eq_select")
+        
+        if equip_data and target_equip_part != "등록된 설비 없음":
+            matched_eq_p = [eq for eq in equip_data if eq['name'] == target_equip_part]
+            if matched_eq_p and matched_eq_p[0].get('photo') and matched_eq_p[0].get('photo') != "사진 없음":
+                st.info(f"📌 현재 선택된 **[{target_equip_part}]** 등록 사진 파일명: **{matched_eq_p[0].get('photo')}**")
+                if 'equip_photo' in locals() and equip_photo is not None:
+                    st.image(equip_photo, caption=f"{target_equip_part} 사진", width=250)
+
+        replace_date = st.date_input("부품 교체 일자", date.today(), key="rep_date")
         
         part_choice = st.selectbox("교체 부품명 선택", ["직접 새 부품명 입력하기"] + existing_parts)
         if part_choice == "직접 새 부품명 입력하기":
@@ -213,21 +232,15 @@ if menu == "⚙️ 기계설비 관리":
         st.subheader("🔎 특정 설비 이력 조회 및 사진 확인")
         search_target = st.selectbox("이력을 조회할 설비를 선택하세요", equip_names, key="search_eq")
         
+        # 🌟 긴 인포 박스(텍스트 줄)는 완전히 삭제하고, 필요한 경우 가볍게 재업로드 기능만 배치
         if equip_data:
             matched_eq = [eq for eq in equip_data if eq['name'] == search_target]
             if matched_eq:
                 eq_info = matched_eq[0]
-                st.info(f"📌 **[{search_target}]** 기본 정보 | 위치: {eq_info.get('location', '-')} | 상태: {eq_info.get('status', '-')} | 등록 사진 파일명: **{eq_info.get('photo', '사진 없음')}**")
-                
-                # 🌟 방금 업로드했거나 이전에 올린 실제 이미지 파일이 있다면 이력 조회 화면에도 바로 띄워주기
-                if 'equip_photo' in locals() and equip_photo is not None:
-                    st.image(equip_photo, caption=f"{search_target} 실제 사진", width=350)
-                elif eq_info.get('photo') and eq_info.get('photo') != "사진 없음":
-                    # 만약 파일 업로더 객체가 기억나지 않을 때 안내용 메시지
-                    st.write("💡 *참고: 사진 파일을 다시 업로드하시면 아래에 즉시 이미지로 렌더링됩니다.*")
-                    re_upload_photo = st.file_uploader("해당 설비 사진 다시 업로드하여 화면에 띄우기 (옵션)", type=["jpg", "png", "jpeg"], key="re_photo")
+                if eq_info.get('photo') and eq_info.get('photo') != "사진 없음":
+                    re_upload_photo = st.file_uploader(f"[{search_target}] 사진 다시 업로드하여 화면에 띄우기 (옵션)", type=["jpg", "png", "jpeg"], key="re_photo")
                     if re_upload_photo is not None:
-                        st.image(re_upload_photo, caption=search_target, width=350)
+                        st.image(re_upload_photo, caption=search_target, width=300)
         
         if parts_data:
             df_all_parts = pd.DataFrame(parts_data)
