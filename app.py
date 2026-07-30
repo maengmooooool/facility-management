@@ -83,7 +83,7 @@ if menu == "⚙️ 기계설비 관리":
     equip_names = sorted(list(set([row['name'] for row in equip_data]))) if equip_data else ["등록된 설비 없음"]
     existing_locations = sorted(list(set([row['location'] for row in equip_data if row.get('location')]))) if equip_data else []
     
-    # 설비별 사진 URL 매핑 (DB에 저장된 photo 컬럼이 곧 인터넷 주소)
+    # 설비별 사진 URL 매핑
     equip_photo_map = {row['name']: row.get('photo', '사진 없음') for row in equip_data} if equip_data else {}
     
     # 🌟 DB에 저장된 영구 이미지 URL을 불러와 화면에 출력하는 함수
@@ -115,7 +115,6 @@ if menu == "⚙️ 기계설비 관리":
                 if equip_name and final_location:
                     photo_url = "사진 없음"
                     
-                    # 🌟 사용자가 사진을 올리면 Supabase Storage에 업로드하고 영구 퍼블릭 URL을 받아옴
                     if equip_photo is not None:
                         file_bytes = equip_photo.getvalue()
                         file_path = f"{int(time.time())}_{equip_photo.name}"
@@ -147,13 +146,59 @@ if menu == "⚙️ 기계설비 관리":
             df_equip_display.columns = ['등록일', '설비명', '위치/공정', '취득금액(원)', '상태']
             st.dataframe(df_equip_display, use_container_width=True, hide_index=True)
 
+        # 🌟 [신규 기능] 등록된 설비 정보 수정 및 삭제 기능
+        st.markdown("---")
+        st.subheader("🛠️ 등록된 설비 정보 수정 및 삭제")
+        if equip_data:
+            eq_dict = {row['name']: row for row in equip_data}
+            selected_edit_name = st.selectbox("수정 또는 삭제할 설비를 선택하세요", equip_names, key="eq_edit_select")
+            
+            if selected_edit_name in eq_dict:
+                current_eq = eq_dict[selected_edit_name]
+                
+                with st.form("edit_equip_form"):
+                    e_loc = st.text_input("설치 위치 및 공정", value=current_eq.get('location', ''))
+                    
+                    status_options = ["🟢 정상 가동", "🟡 점검 요망", "🔴 수리 중"]
+                    curr_status = current_eq.get('status', "🟢 정상 가동")
+                    status_idx = status_options.index(curr_status) if curr_status in status_options else 0
+                    e_status = st.selectbox("현재 상태", status_options, index=status_idx)
+                    
+                    e_cost = st.number_input("취득금액 (원)", min_value=0, step=10000, value=int(current_eq.get('cost', 0)))
+                    
+                    try:
+                        default_date = datetime.strptime(current_eq.get('install_date', str(date.today())), "%Y-%m-%d").date()
+                    except:
+                        default_date = date.today()
+                    e_date = st.date_input("설비 등록일 (설치일)", value=default_date, key="edit_install_date")
+                    
+                    col_update, col_del = st.columns(2)
+                    with col_update:
+                        update_submitted = st.form_submit_button("💾 설비 정보 수정 저장")
+                    with col_del:
+                        delete_submitted = st.form_submit_button("🗑️ 해당 설비 삭제")
+                    
+                    if update_submitted:
+                        supabase.table("equipment").update({
+                            "location": e_loc,
+                            "status": e_status,
+                            "cost": e_cost,
+                            "install_date": str(e_date)
+                        }).eq("id", current_eq['id']).execute()
+                        st.success(f"✅ [{selected_edit_name}] 정보가 수정되었습니다!")
+                        st.rerun()
+                        
+                    if delete_submitted:
+                        supabase.table("equipment").delete().eq("id", current_eq['id']).execute()
+                        st.success(f"🗑️ [{selected_edit_name}] 설비가 삭제되었습니다!")
+                        st.rerun()
+
     # --- [탭 2] 점검 내역 관리 ---
     with tab_inspect:
         st.write("설비의 정기/수시 점검 내역을 기록합니다.")
         
         target_equip_ins = st.selectbox("점검한 설비 선택", equip_names, key="inspect_eq_target")
         
-        # 🌟 로그아웃 후 재로그인해도 DB 주소로 사진 항상 고정 출력
         if equip_data and target_equip_ins != "등록된 설비 없음":
             render_equipment_photo(target_equip_ins, width=300)
 
@@ -191,7 +236,6 @@ if menu == "⚙️ 기계설비 관리":
         
         target_equip_part = st.selectbox("부품을 교체한 설비 선택", equip_names, key="part_eq_select")
         
-        # 🌟 로그아웃 후 재로그인해도 DB 주소로 사진 항상 고정 출력
         if equip_data and target_equip_part != "등록된 설비 없음":
             render_equipment_photo(target_equip_part, width=300)
 
@@ -238,7 +282,6 @@ if menu == "⚙️ 기계설비 관리":
         
         search_target = st.selectbox("이력을 조회할 설비를 선택하세요", equip_names, key="search_eq")
         
-        # 🌟 로그아웃 후 재로그인해도 DB 주소로 사진 항상 고정 출력
         if equip_data and search_target != "등록된 설비 없음":
             render_equipment_photo(search_target, width=300)
         
