@@ -95,7 +95,6 @@ if menu == "⚙️ 기계설비 관리":
             elif os.path.exists(photo_val):
                 st.image(photo_val, caption=f"{eq_name} 사진", width=width)
             else:
-                # 파일 이름만 저장되어 있는 경우, 여기서 바로 파일을 업로드하면 앞으로 영구 저장됩니다!
                 upl = st.file_uploader(f"[{eq_name}] 기존 파일명('{photo_val}')에 해당하는 사진을 선택해 주세요 (최초 1회)", type=["jpg", "png", "jpeg"], key=f"fix_photo_{eq_name}")
                 if upl is not None:
                     file_bytes = upl.getvalue()
@@ -103,7 +102,6 @@ if menu == "⚙️ 기계설비 관리":
                     try:
                         supabase.storage.from_("equipment-photos").upload(file_path, file_bytes)
                         res_url = supabase.storage.from_("equipment-photos").get_public_url(file_path)
-                        # DB 업데이트
                         match_row = [r for r in equip_data if r['name'] == eq_name]
                         if match_row:
                             supabase.table("equipment").update({"photo": res_url}).eq("id", match_row[0]['id']).execute()
@@ -487,7 +485,7 @@ elif menu == "📦 물류 및 재고 (ERP)":
             cols = st.columns(3)
             for i, row in inventory_summary.iterrows():
                 with cols[i % 3]:
-                    st.metric(label=f"📦 {row['품목명']}", value=f"{row['현재 Re-']:.1f} {row['단위']}" if '현재 Re-' in row else f"📦 {row['품목명']}", value=f"{row['현재 재고']:.1f} {row['단위']}")
+                    st.metric(label=f"📦 {row['품목명']}", value=f"{row['현재 재고']:.1f} {row['단위']}")
             
             st.markdown("---")
             st.write("📈 **품목별 누적 재고 트렌드**")
