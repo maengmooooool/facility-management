@@ -92,13 +92,12 @@ if menu == "⚙️ 기계설비 관리":
         if photo_val and photo_val != "사진 없음":
             if photo_val.startswith("http"):
                 st.image(photo_val, caption=f"{eq_name} 사진", width=width)
-            elif os.path.exists(photo_val):
-                st.image(photo_val, caption=f"{eq_name} 사진", width=width)
             else:
-                upl = st.file_uploader(f"[{eq_name}] 기존 파일명('{photo_val}')에 해당하는 사진을 선택해 주세요 (최초 1회)", type=["jpg", "png", "jpeg"], key=f"fix_photo_{eq_name}")
+                upl = st.file_uploader(f"[{eq_name}] 기존 파일명 확인을 위해 사진을 다시 선택해 주세요 (최초 1회)", type=["jpg", "png", "jpeg"], key=f"fix_photo_{eq_name}")
                 if upl is not None:
                     file_bytes = upl.getvalue()
-                    file_path = f"{int(time.time())}_{upl.name}"
+                    ext = upl.name.split('.')[-1]
+                    file_path = f"equip_{int(time.time())}.{ext}"
                     try:
                         supabase.storage.from_("equipment-photos").upload(file_path, file_bytes)
                         res_url = supabase.storage.from_("equipment-photos").get_public_url(file_path)
@@ -131,24 +130,29 @@ if menu == "⚙️ 기계설비 관리":
             
             if st.button("신규 설비 등록 저장"):
                 if equip_name and final_location:
-                    photo_url = "사진 없음"
-                    
-                    if equip_photo is not None:
-                        file_bytes = equip_photo.getvalue()
-                        file_path = f"{int(time.time())}_{equip_photo.name}"
-                        try:
-                            supabase.storage.from_("equipment-photos").upload(file_path, file_bytes)
-                            res_url = supabase.storage.from_("equipment-photos").get_public_url(file_path)
-                            photo_url = res_url
-                        except Exception as e:
-                            st.error(f"사진 업로드 중 오류 발생: {e}")
-                            
-                    supabase.table("equipment").insert({
-                        "name": equip_name, "location": final_location, "status": status,
-                        "cost": equip_cost, "photo": photo_url, "install_date": str(install_date)
-                    }).execute()
-                    st.success(f"✅ [{equip_name}] 등록 완료!")
-                    st.rerun()
+                    # 🌟 설비명 중복 체크 로직
+                    is_duplicate = any(row['name'] == equip_name for row in equip_data)
+                    if is_duplicate:
+                        st.error(f"⚠️ 이미 존재하는 설비명입니다: [{equip_name}]. 다른 설비명을 입력해 주세요.")
+                    else:
+                        photo_url = "사진 없음"
+                        if equip_photo is not None:
+                            file_bytes = equip_photo.getvalue()
+                            ext = equip_photo.name.split('.')[-1]
+                            file_path = f"equip_{int(time.time())}.{ext}"
+                            try:
+                                supabase.storage.from_("equipment-photos").upload(file_path, file_bytes)
+                                res_url = supabase.storage.from_("equipment-photos").get_public_url(file_path)
+                                photo_url = res_url
+                            except Exception as e:
+                                st.error(f"사진 업로드 중 오류 발생: {e}")
+                                
+                        supabase.table("equipment").insert({
+                            "name": equip_name, "location": final_location, "status": status,
+                            "cost": equip_cost, "photo": photo_url, "install_date": str(install_date)
+                        }).execute()
+                        st.success(f"✅ [{equip_name}] 등록 완료!")
+                        st.rerun()
                 else:
                     st.warning("설비명과 위치를 모두 입력해 주세요.")
                 
