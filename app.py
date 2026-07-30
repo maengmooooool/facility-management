@@ -15,8 +15,8 @@ def init_connection():
 supabase: Client = init_connection()
 
 # --- 2. 화면 구성 ---
-st.set_page_config(page_title="기계설비 관리", layout="wide")
-# --- 폰트 변경 (나눔고딕) ---
+st.set_page_config(page_title="(주)호성 통합시스템", layout="wide")
+
 # --- 폰트 및 글씨 크기 변경 ---
 st.markdown("""
 <style>
@@ -24,11 +24,61 @@ st.markdown("""
 
 html, body, [class*="css"]  {
     font-family: 'Nanum Gothic', sans-serif !important;
-    font-size: 18px !important;  /* 👈 이 숫자를 바꿔서 크기를 조절하세요! */
+    font-size: 18px !important; 
 }
 </style>
 """, unsafe_allow_html=True)
-st.title("☁️ (주)호성")
+
+
+# ==========================================
+# 🌟 새롭게 추가되는 왼쪽 메뉴바 (사이드바) 🌟
+# ==========================================
+with st.sidebar:
+    st.title("🏢 (주)호성 통합메뉴")
+    menu = st.radio("메뉴를 선택하세요", 
+                    ["⚙️ 기계설비 관리", "📝 전자결재 (기안)", "📦 물류 및 재고 (ERP)"])
+
+
+# ==========================================
+# [메뉴 2] 전자결재 시스템 화면
+# ==========================================
+if menu == "📝 전자결재 (기안)":
+    st.title("📝 사내 전자결재 시스템")
+    st.write("부품 구매나 수리 비용 결재를 상신하고 승인하는 공간입니다.")
+    
+    doc_title = st.text_input("기안 제목 (예: 파쇄기 모터 교체 비용 청구)")
+    doc_content = st.text_area("상세 요청 내용")
+    st.button("결재 상신하기")
+    
+    st.stop() # 👈 중요: 다른 메뉴를 선택했을 때는 여기서 화면 그리기를 멈춥니다!
+
+
+# ==========================================
+# [메뉴 3] 재고/물류 관리 (ERP) 화면
+# ==========================================
+elif menu == "📦 물류 및 재고 (ERP)":
+    st.title("📦 실시간 재고/물류 관리")
+    st.write("주요 취급 품목의 일일 입고량과 출고량을 기록합니다.")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        item_type = st.selectbox("품목 선택", ["고철", "폐목재", "기타"])
+        in_out = st.radio("물류 구분", ["입고", "출고"])
+    with col2:
+        weight = st.number_input("수량 (단위: 톤)", min_value=0.0, step=0.1)
+        st.write("") 
+        st.write("")
+        st.button("물류 내역 저장")
+        
+    st.stop() # 👈 중요
+
+
+# ==========================================
+# [메뉴 1] 기존 기계설비 관리 화면 
+# (위에서 st.stop()이 걸리지 않았다면 자동으로 이 화면이 나옵니다)
+# ==========================================
+
+st.title("☁️ (주)호성 - 기계설비 관리")
 
 tab1, tab2, tab3 = st.tabs(["📋 설비 등록 및 관리", "🔍 점검 내역 관리", "🔧 부품 교체 관리"])
 
@@ -54,6 +104,7 @@ def get_part_name_list():
 # ==========================================
 with tab1:
     st.subheader("신규 설비 등록")
+    # 👇👇 여기서부터 아래에 있는 기존 코드들은 원래대로 쭉 두시면 됩니다! 👇👇
     with st.form("equip_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
