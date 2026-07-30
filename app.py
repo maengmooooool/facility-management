@@ -54,7 +54,7 @@ if not st.session_state['logged_in']:
 
 
 # ==========================================
-# 🏢 4. 왼쪽 메뉴바 (반드시 본문보다 위에 있어야 합니다!)
+# 🏢 4. 왼쪽 메뉴바
 # ==========================================
 with st.sidebar:
     st.success(f"👤 **{st.session_state['username']}**님 접속 중")
@@ -128,11 +128,19 @@ if menu == "⚙️ 기계설비 관리":
     # --- [탭 2] 점검 내역 관리 ---
     with tab_inspect:
         st.write("설비의 정기/수시 점검 내역을 기록합니다.")
+        
         with st.form("inspect_form"):
+            # 🌟 점검 날짜 직접 선택 기능 추가
+            inspect_date = st.date_input("점검 일자", date.today())
             target_equip_ins = st.selectbox("점검한 설비 선택", equip_names)
             inspect_detail = st.text_area("점검 상세 내역 및 조치사항")
+            
             if st.form_submit_button("점검 내역 저장") and target_equip_ins != "등록된 설비 없음":
-                supabase.table("inspections").insert({"equipment_name": target_equip_ins, "detail": inspect_detail}).execute()
+                supabase.table("inspections").insert({
+                    "equipment_name": target_equip_ins, 
+                    "detail": inspect_detail,
+                    "inspect_date": str(inspect_date) # 🌟 지정한 점검일 저장
+                }).execute()
                 st.success("✅ 점검 내역이 저장되었습니다.")
                 st.rerun()
                 
@@ -140,11 +148,13 @@ if menu == "⚙️ 기계설비 관리":
         res_ins = supabase.table("inspections").select("*").execute()
         if res_ins.data:
             df_ins = pd.DataFrame(res_ins.data)
+            if 'inspect_date' not in df_ins.columns:
+                df_ins['inspect_date'] = df_ins['created_at'].apply(lambda x: x[:10])
+            df_ins['inspect_date'] = df_ins['inspect_date'].fillna(df_ins['created_at'].apply(lambda x: x[:10]))
             df_ins['photo'] = df_ins['equipment_name'].map(equip_photo_map).fillna('사진 없음')
             
-            df_ins_display = df_ins[['created_at', 'equipment_name', 'detail', 'photo']].sort_values(by='created_at', ascending=False)
+            df_ins_display = df_ins[['inspect_date', 'equipment_name', 'detail', 'photo']].sort_values(by='inspect_date', ascending=False)
             df_ins_display.columns = ['점검일자', '설비명', '점검내역', '설비사진명']
-            df_ins_display['점검일자'] = df_ins_display['점검일자'].apply(lambda x: x[:10])
             st.dataframe(df_ins_display, use_container_width=True, hide_index=True)
 
     # --- [탭 3] 부품 교체 관리 ---
@@ -154,7 +164,10 @@ if menu == "⚙️ 기계설비 관리":
         parts_data = res_parts.data if res_parts.data else []
         existing_parts = sorted(list(set([row['part_name'] for row in parts_data if row.get('part_name')]))) if parts_data else []
         
+        # 🌟 부품 교체 날짜 직접 선택 기능 추가
+        replace_date = st.date_input("부품 교체 일자", date.today(), key="rep_date")
         target_equip_part = st.selectbox("부품을 교체한 설비 선택", equip_names, key="part_eq_select")
+        
         part_choice = st.selectbox("교체 부품명 선택", ["직접 새 부품명 입력하기"] + existing_parts)
         if part_choice == "직접 새 부품명 입력하기":
             final_part_name = st.text_input("새로운 부품명 입력")
@@ -173,7 +186,8 @@ if menu == "⚙️ 기계설비 관리":
             if target_equip_part != "등록된 설비 없음" and final_part_name:
                 supabase.table("parts").insert({
                     "equipment_name": target_equip_part, "part_name": final_part_name,
-                    "quantity": part_qty, "unit_price": part_price, "total_cost": total_price, "detail": part_detail
+                    "quantity": part_qty, "unit_price": part_price, "total_cost": total_price, 
+                    "detail": part_detail, "replace_date": str(replace_date) # 🌟 지정한 교체일 저장
                 }).execute()
                 st.success("✅ 부품 교체 내역이 저장되었습니다.")
                 st.rerun()
@@ -181,11 +195,13 @@ if menu == "⚙️ 기계설비 관리":
         st.write("📋 **최근 부품 교체 기록 목록 (설비 사진 정보 연동)**")
         if parts_data:
             df_pts = pd.DataFrame(parts_data)
+            if 'replace_date' not in df_pts.columns:
+                df_pts['replace_date'] = df_pts['created_at'].apply(lambda x: x[:10])
+            df_pts['replace_date'] = df_pts['replace_date'].fillna(df_pts['created_at'].apply(lambda x: x[:10]))
             df_pts['photo'] = df_pts['equipment_name'].map(equip_photo_map).fillna('사진 없음')
             
-            df_pts_display = df_pts[['created_at', 'equipment_name', 'part_name', 'quantity', 'total_cost', 'photo']].sort_values(by='created_at', ascending=False)
+            df_pts_display = df_pts[['replace_date', 'equipment_name', 'part_name', 'quantity', 'total_cost', 'photo']].sort_values(by='replace_date', ascending=False)
             df_pts_display.columns = ['교체일자', '설비명', '교체부품명', '수량', '합계금액(원)', '설비사진명']
-            df_pts_display['교체일자'] = df_pts_display['교체일자'].apply(lambda x: x[:10])
             st.dataframe(df_pts_display, use_container_width=True, hide_index=True)
 
     # --- [탭 4] 이력 조회 및 데이터 관리 ---
@@ -202,12 +218,14 @@ if menu == "⚙️ 기계설비 관리":
         
         if parts_data:
             df_all_parts = pd.DataFrame(parts_data)
+            if 'replace_date' not in df_all_parts.columns:
+                df_all_parts['replace_date'] = df_all_parts['created_at'].apply(lambda x: x[:10])
+            
             filtered_df = df_all_parts[df_all_parts['equipment_name'] == search_target]
             if not filtered_df.empty:
-                filtered_df = filtered_df.sort_values(by='created_at', ascending=False)
-                disp_df = filtered_df[['created_at', 'part_name', 'quantity', 'total_cost', 'detail']]
+                filtered_df = filtered_df.sort_values(by='replace_date', ascending=False)
+                disp_df = filtered_df[['replace_date', 'part_name', 'quantity', 'total_cost', 'detail']]
                 disp_df.columns = ['교체일자', '부품명', '수량', '비용(원)', '특이사항']
-                disp_df['교체일자'] = disp_df['교체일자'].apply(lambda x: x[:10])
                 st.dataframe(disp_df, use_container_width=True, hide_index=True)
             else:
                 st.info(f"'{search_target}'의 부품 교체 이력이 없습니다.")
