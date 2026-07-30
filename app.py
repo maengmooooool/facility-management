@@ -45,17 +45,32 @@ with st.sidebar:
 if menu == "📝 전자결재 (기안)":
     st.title("📝 사내 전자결재 시스템")
     
-    # 🌟 탭을 3개로 확장: 기안, 결재함, 그리고 완료함(보관/출력)
     tab_draft, tab_approve, tab_archive = st.tabs(["📝 기안 작성", "✅ 결재함 (관리자용)", "🗄️ 결재 완료 문서함"])
     
     admin_list = ["김공장장", "이이사", "박대표", "최팀장"]
     
     # --- [탭 1] 직원이 기안하는 화면 ---
     with tab_draft:
-        st.write("부품 구매나 수리 비용 결재를 상신하는 공간입니다.")
+        st.write("문서 양식을 선택한 후, 빈칸을 채워 결재를 상신해 주세요.")
+        
+        # 🌟 1. 문서 양식 선택 버튼 (가로로 배치)
+        doc_type = st.radio(
+            "📋 문서 양식 선택", 
+            ["📝 일반 기안문", "💰 지출 품의서 (비용 청구)", "📊 업무 보고서"], 
+            horizontal=True
+        )
         
         doc_title = st.text_input("기안 제목 (예: 파쇄기 모터 교체 비용 청구)")
-        doc_content = st.text_area("상세 요청 내용")
+        
+        # 🌟 2. 선택한 양식에 따라 텍스트 입력창의 기본 템플릿(서식) 자동 변경
+        if doc_type == "📝 일반 기안문":
+            template = "■ 기안 목적:\n\n\n■ 상세 내용:\n\n\n■ 비고:\n"
+        elif doc_type == "💰 지출 품의서 (비용 청구)":
+            template = "■ 청구 내역 (품목/공사명):\n\n■ 예상 비용 (VAT 포함):\n             원\n■ 결제 수단 (법인카드/계좌이체 등):\n\n■ 거래처 정보:\n\n■ 첨부(영수증/견적서) 유무:\n"
+        elif doc_type == "📊 업무 보고서":
+            template = "■ 주요 업무 내용:\n\n\n■ 특이사항 (이슈 및 건의사항):\n\n\n■ 향후 계획:\n"
+            
+        doc_content = st.text_area("상세 내용 작성", value=template, height=250)
         
         selected_approvers = st.multiselect(
             "결재권자 지정 (최대 3명 선택 가능)", 
@@ -68,8 +83,13 @@ if menu == "📝 전자결재 (기안)":
                 st.warning("⚠️ 기안 제목을 입력하고, 결재권자를 최소 1명 이상 지정해 주세요.")
             else:
                 approvers_str = ",".join(selected_approvers)
+                
+                # 🌟 3. 결재함에서 알아보기 쉽게 제목 앞에 [지출 품의서] 처럼 양식 이름을 자동으로 달아줍니다.
+                type_prefix = doc_type.split(" ")[1] # 이모지 제외한 텍스트만 추출
+                final_title = f"[{type_prefix}] {doc_title}"
+                
                 data = {
-                    "title": doc_title,
+                    "title": final_title,
                     "content": doc_content,
                     "status": "대기중",
                     "approvers": approvers_str,
@@ -99,16 +119,16 @@ if menu == "📝 전자결재 (기안)":
             else:
                 for doc in my_docs:
                     with st.expander(f"📄 {doc['title']}"):
-                        st.write(f"**상세 내용:** {doc['content']}")
-                        st.write(f"**지정된 전체 결재자:** {doc['approvers']}")
+                        st.write(f"**상세 내용:**")
+                        st.info(doc['content'])
+                        st.write(f"- **지정된 전체 결재자:** {doc['approvers']}")
                         current_approved = doc.get('approved_by') if doc.get('approved_by') else "없음"
-                        st.write(f"**현재까지 승인 완료한 사람:** {current_approved}")
+                        st.write(f"- **현재까지 승인 완료한 사람:** {current_approved}")
                         
                         col1, col2 = st.columns(2)
                         with col1:
                             if st.button("✅ 내 순서 승인하기", key=f"app_{doc['id']}"):
                                 new_approved_by = doc.get('approved_by', '') + f"{current_admin},"
-                                
                                 approvers_list = [name.strip() for name in doc['approvers'].split(',') if name.strip()]
                                 approved_list = [name.strip() for name in new_approved_by.split(',') if name.strip()]
                                 
@@ -130,11 +150,10 @@ if menu == "📝 전자결재 (기안)":
         else:
             st.info("결재 문서를 보려면 위에서 접속자 이름을 선택해 주세요.")
 
-    # --- [탭 3] 결재 완료 문서 보관 및 출력 화면 🌟 ---
+    # --- [탭 3] 결재 완료 문서 보관 및 출력 화면 ---
     with tab_archive:
         st.write("결재가 끝난(승인/반려) 문서를 열람하고 다운로드(출력)합니다.")
         
-        # '대기중'이 아닌 문서들(결재가 끝난 문서들)을 최신순(id 역순)으로 불러오기
         res = supabase.table("approvals").select("*").neq("status", "대기중").order("id", desc=True).execute()
         completed_docs = res.data
         
@@ -142,11 +161,9 @@ if menu == "📝 전자결재 (기안)":
             st.info("📭 아직 결재가 완료된 문서가 없습니다.")
         else:
             for doc in completed_docs:
-                # 상태에 따라 아이콘을 다르게 표시
                 icon = "🟢" if "승인됨" in doc['status'] else "🔴"
                 with st.expander(f"{icon} {doc['title']} ({doc['status']}) - {doc['created_at'][:10]}"):
                     
-                    # 1. 화면 열람용 표시
                     st.markdown(f"### 📋 {doc['title']}")
                     st.write(f"- **결재 상태:** {doc['status']}")
                     st.write(f"- **기안 일자:** {doc['created_at'][:10]}")
@@ -156,7 +173,6 @@ if menu == "📝 전자결재 (기안)":
                     st.write(f"**[상세 요청 내용]**")
                     st.info(doc['content'])
                     
-                    # 2. 문서 다운로드/출력용 서식 만들기
                     doc_text = f"""
 ======================================
          결 재 완 료 문 서
@@ -171,7 +187,6 @@ if menu == "📝 전자결재 (기안)":
 {doc['content']}
 ======================================
 """
-                    # 3. 텍스트 파일로 저장하는 버튼
                     st.download_button(
                         label="💾 문서 다운로드 (인쇄/보관용)",
                         data=doc_text,
@@ -179,9 +194,9 @@ if menu == "📝 전자결재 (기안)":
                         mime="text/plain",
                         key=f"dl_{doc['id']}"
                     )
-                    st.caption("💡 팁: 다운로드한 파일을 열어서 **인쇄(Ctrl+P)**를 누르시면 **PDF로 저장**하여 보관하시거나 종이로 깔끔하게 출력하실 수 있으며, 모바일 기기의 **Samsung Notes** 등에도 쉽게 불러와서 기록하실 수 있습니다.")
+                    st.caption("💡 팁: 다운로드한 텍스트 파일을 열어 인쇄(Ctrl+P)를 통해 PDF로 변환하거나, Samsung Notes에 첨부하여 깔끔하게 보관하실 수 있습니다.")
 
-    st.stop() # 👈 다른 메뉴를 선택했을 때는 여기서 화면 그리기를 멈춥니다!
+    st.stop()
 
 # ==========================================
 # [메뉴 3] 재고/물류 관리 (ERP) 화면
