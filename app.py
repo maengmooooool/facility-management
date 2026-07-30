@@ -15,7 +15,19 @@ def init_connection():
 supabase: Client = init_connection()
 
 # --- 2. 화면 구성 ---
-st.set_page_config(page_title="기계설비 관리 (Cloud)", layout="wide")
+st.set_page_config(page_title="기계설비 관리", layout="wide")
+# --- 폰트 변경 (나눔고딕) ---
+# --- 폰트 및 글씨 크기 변경 ---
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap');
+
+html, body, [class*="css"]  {
+    font-family: 'Nanum Gothic', sans-serif !important;
+    font-size: 18px !important;  /* 👈 이 숫자를 바꿔서 크기를 조절하세요! */
+}
+</style>
+""", unsafe_allow_html=True)
 st.title("☁️ (주)호성")
 
 tab1, tab2, tab3 = st.tabs(["📋 설비 등록 및 관리", "🔍 점검 내역 관리", "🔧 부품 교체 관리"])
