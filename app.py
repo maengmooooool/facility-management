@@ -2,6 +2,7 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 from datetime import date, datetime, timedelta
+import os
 import time
 
 # --- 1. Supabase 클라우드 데이터베이스 연결 ---
@@ -82,8 +83,25 @@ if menu == "⚙️ 기계설비 관리":
     
     equip_names = sorted(list(set([row['name'] for row in equip_data]))) if equip_data else ["등록된 설비 없음"]
     existing_locations = sorted(list(set([row['location'] for row in equip_data if row.get('location')]))) if equip_data else []
+    
+    # 설비별 사진 파일명 매핑
     equip_photo_map = {row['name']: row.get('photo', '사진 없음') for row in equip_data} if equip_data else {}
     
+    # 🌟 사진 파일을 자동으로 찾아주는 헬퍼 함수 (업로드 없이도 폴더나 저장소에서 로드)
+    def render_equipment_photo(eq_name, width=300):
+        photo_filename = equip_photo_map.get(eq_name, "사진 없음")
+        if photo_filename and photo_filename != "사진 없음":
+            # 1. 만약 현재 폴더에 해당 파일명이 존재하면 바로 띄우기
+            if os.path.exists(photo_filename):
+                st.image(photo_filename, caption=f"{eq_name} 사진", width=width)
+            else:
+                # 2. 폴더에 없다면 업로더를 통해 수동으로 한 번 지정할 수 있도록 보조 제공
+                upl = st.file_uploader(f"[{eq_name}] 기존 이미지 파일 확인을 위해 '{photo_filename}' 파일을 선택해 주세요 (최초 1회)", type=["jpg", "png", "jpeg"], key=f"auto_up_{eq_name}")
+                if upl is not None:
+                    st.image(upl, caption=f"{eq_name} 사진", width=width)
+                else:
+                    st.info(f"💡 DB에 저장된 사진명: **{photo_filename}** (동일한 이름의 이미지를 업로드하면 항상 자동 표시됩니다.)")
+
     # --- [탭 1] 설비 등록 및 현황 ---
     with tab_equip:
         st.write("신규 설비를 등록하고 현재 상태를 확인합니다.")
@@ -104,6 +122,11 @@ if menu == "⚙️ 기계설비 관리":
             if st.button("신규 설비 등록 저장"):
                 if equip_name and final_location:
                     photo_name = equip_photo.name if equip_photo else "사진 없음"
+                    # 업로드한 파일이 있으면 로컬 폴더에 실제로 저장해두기
+                    if equip_photo is not None:
+                        with open(equip_photo.name, "wb") as f:
+                            f.write(equip_photo.getbuffer())
+                            
                     supabase.table("equipment").insert({
                         "name": equip_name, "location": final_location, "status": status,
                         "cost": equip_cost, "photo": photo_name, "install_date": str(install_date)
@@ -121,7 +144,6 @@ if menu == "⚙️ 기계설비 관리":
                 df_equip['install_date'] = df_equip['created_at'].apply(lambda x: x[:10])
             df_equip['install_date'] = df_equip['install_date'].fillna(df_equip['created_at'].apply(lambda x: x[:10]))
             
-            # 🌟 설비 등록 목록에서 'photo' 컬럼 제외
             df_equip_display = df_equip[['install_date', 'name', 'location', 'cost', 'status']].sort_values(by='install_date', ascending=False)
             df_equip_display.columns = ['등록일', '설비명', '위치/공정', '취득금액(원)', '상태']
             st.dataframe(df_equip_display, use_container_width=True, hide_index=True)
@@ -136,11 +158,9 @@ if menu == "⚙️ 기계설비 관리":
         
         target_equip_ins = st.selectbox("점검한 설비 선택", equip_names, key="inspect_eq_target")
         
+        # 🌟 로그인 후 업로드 없이도 기존 사진 자동 로드
         if equip_data and target_equip_ins != "등록된 설비 없음":
-            matched_eq = [eq for eq in equip_data if eq['name'] == target_equip_ins]
-            if matched_eq and matched_eq[0].get('photo') and matched_eq[0].get('photo') != "사진 없음":
-                if 'equip_photo' in locals() and equip_photo is not None:
-                    st.image(equip_photo, caption=f"{target_equip_ins} 사진", width=300)
+            render_equipment_photo(target_equip_ins, width=300)
 
         with st.form("inspect_form"):
             inspect_date = st.date_input("점검 일자", date.today())
@@ -163,7 +183,6 @@ if menu == "⚙️ 기계설비 관리":
                 df_ins['inspect_date'] = df_ins['created_at'].apply(lambda x: x[:10])
             df_ins['inspect_date'] = df_ins['inspect_date'].fillna(df_ins['created_at'].apply(lambda x: x[:10]))
             
-            # 🌟 점검 기록 목록에서 'photo' 컬럼 제외
             df_ins_display = df_ins[['inspect_date', 'equipment_name', 'detail']].sort_values(by='inspect_date', ascending=False)
             df_ins_display.columns = ['점검일자', '설비명', '점검내역']
             st.dataframe(df_ins_display, use_container_width=True, hide_index=True)
@@ -177,11 +196,9 @@ if menu == "⚙️ 기계설비 관리":
         
         target_equip_part = st.selectbox("부품을 교체한 설비 선택", equip_names, key="part_eq_select")
         
+        # 🌟 로그인 후 업로드 없이도 기존 사진 자동 로드
         if equip_data and target_equip_part != "등록된 설비 없음":
-            matched_eq_p = [eq for eq in equip_data if eq['name'] == target_equip_part]
-            if matched_eq_p and matched_eq_p[0].get('photo') and matched_eq_p[0].get('photo') != "사진 없음":
-                if 'equip_photo' in locals() and equip_photo is not None:
-                    st.image(equip_photo, caption=f"{target_equip_part} 사진", width=300)
+            render_equipment_photo(target_equip_part, width=300)
 
         replace_date = st.date_input("부품 교체 일자", date.today(), key="rep_date")
         
@@ -216,7 +233,6 @@ if menu == "⚙️ 기계설비 관리":
                 df_pts['replace_date'] = df_pts['created_at'].apply(lambda x: x[:10])
             df_pts['replace_date'] = df_pts['replace_date'].fillna(df_pts['created_at'].apply(lambda x: x[:10]))
             
-            # 🌟 부품 교체 기록 목록에서 'photo' 컬럼 제외
             df_pts_display = df_pts[['replace_date', 'equipment_name', 'part_name', 'quantity', 'total_cost']].sort_values(by='replace_date', ascending=False)
             df_pts_display.columns = ['교체일자', '설비명', '교체부품명', '수량', '합계금액(원)']
             st.dataframe(df_pts_display, use_container_width=True, hide_index=True)
@@ -227,16 +243,9 @@ if menu == "⚙️ 기계설비 관리":
         
         search_target = st.selectbox("이력을 조회할 설비를 선택하세요", equip_names, key="search_eq")
         
+        # 🌟 로그인 후 업로드 없이도 기존 사진 자동 로드
         if equip_data and search_target != "등록된 설비 없음":
-            matched_eq = [eq for eq in equip_data if eq['name'] == search_target]
-            if matched_eq:
-                eq_info = matched_eq[0]
-                if 'equip_photo' in locals() and equip_photo is not None:
-                    st.image(equip_photo, caption=f"{search_target} 사진", width=300)
-                elif eq_info.get('photo') and eq_info.get('photo') != "사진 없음":
-                    re_upload_photo = st.file_uploader(f"[{search_target}] 등록된 사진 화면에 띄우기 (사진 파일 선택)", type=["jpg", "png", "jpeg"], key="re_photo")
-                    if re_upload_photo is not None:
-                        st.image(re_upload_photo, caption=search_target, width=300)
+            render_equipment_photo(search_target, width=300)
         
         if parts_data:
             df_all_parts = pd.DataFrame(parts_data)
