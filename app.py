@@ -319,7 +319,3 @@ elif menu == "📦 물류 및 재고 (ERP)":
             st.dataframe(df_display, use_container_width=True, hide_index=True)
 
     st.stop()
-            
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-    st.stop()
