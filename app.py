@@ -316,7 +316,6 @@ elif menu == "📦 물류 및 재고 (ERP)":
             
             df_display = df[['log_date', 'item_type', 'in_out', 'weight', 'unit']].sort_values(by='log_date', ascending=False)
             df_display.columns = ['일시', '품목', '구분', '수량', '단위']
-            
             st.dataframe(df_display, use_container_width=True, hide_index=True)
 
     st.stop()
