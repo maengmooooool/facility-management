@@ -44,25 +44,103 @@ with st.sidebar:
 # ==========================================
 if menu == "📝 전자결재 (기안)":
     st.title("📝 사내 전자결재 시스템")
-    st.write("부품 구매나 수리 비용 결재를 상신하고 승인하는 공간입니다.")
     
-    doc_title = st.text_input("기안 제목 (예: 파쇄기 모터 교체 비용 청구)")
-    doc_content = st.text_area("상세 요청 내용")
-# 👇 여기서부터 버튼에 생명을 불어넣는 코드입니다!
-    if st.button("결재 상신하기"):
-        if doc_title == "":
-            st.warning("⚠️ 기안 제목을 입력해 주세요.")
-        else:
-            # Supabase의 'approvals' 표에 데이터를 저장하라는 명령어
-            data = {
-                "title": doc_title,
-                "content": doc_content,
-                "status": "대기중"
-            }
-            supabase.table("approvals").insert(data).execute()
+    tab_draft, tab_approve = st.tabs(["📝 기안 작성", "✅ 결재함 (관리자용)"])
+    
+    # 👥 (주)호성 사내 결재권자 명단 (원하시는 대로 수정 가능합니다)
+    admin_list = ["김공장장", "이이사", "박대표", "최팀장"]
+    
+    # --- [탭 1] 직원이 기안하는 화면 ---
+    with tab_draft:
+        st.write("부품 구매나 수리 비용 결재를 상신하는 공간입니다.")
+        
+        doc_title = st.text_input("기안 제목 (예: 파쇄기 모터 교체 비용 청구)")
+        doc_content = st.text_area("상세 요청 내용")
+        
+        # 🌟 다중 선택 기능 (최대 3명까지)
+        selected_approvers = st.multiselect(
+            "결재권자 지정 (최대 3명 선택 가능)", 
+            options=admin_list, 
+            max_selections=3
+        )
+        
+        if st.button("결재 상신하기"):
+            if doc_title == "" or len(selected_approvers) == 0:
+                st.warning("⚠️ 기안 제목을 입력하고, 결재권자를 최소 1명 이상 지정해 주세요.")
+            else:
+                # 선택된 3명의 이름을 쉼표(,)로 연결해서 문자로 만듦 (예: "김공장장, 박대표")
+                approvers_str = ",".join(selected_approvers)
+                
+                data = {
+                    "title": doc_title,
+                    "content": doc_content,
+                    "status": "대기중",
+                    "approvers": approvers_str,
+                    "approved_by": "" # 아직 아무도 승인 안 했으므로 빈칸
+                }
+                supabase.table("approvals").insert(data).execute()
+                st.success("✅ 결재가 성공적으로 상신되었습니다!")
+                
+    # --- [탭 2] 사장님이 결재하는 화면 ---
+    with tab_approve:
+        # 🌟 테스트용 가짜 로그인: 현재 누가 화면을 보고 있는지 선택합니다.
+        current_admin = st.selectbox("👤 현재 접속자 (테스트용 가상 로그인)", ["접속자 선택"] + admin_list)
+        
+        if current_admin != "접속자 선택":
+            st.write(f"반갑습니다, **{current_admin}**님! 결재 대기 문서를 확인합니다.")
             
-            st.success("✅ 결재가 성공적으로 상신되었습니다!")
-    
+            # 상태가 '대기중'인 서류 불러오기
+            res = supabase.table("approvals").select("*").eq("status", "대기중").execute()
+            pending_docs = res.data
+            
+            # 🌟 내가 결재권자로 지정되어 있고, 아직 내가 도장을 안 찍은 서류만 걸러냅니다.
+            my_docs = []
+            for doc in pending_docs:
+                if doc.get('approvers') and current_admin in doc['approvers']:
+                    if not doc.get('approved_by') or current_admin not in doc['approved_by']:
+                        my_docs.append(doc)
+            
+            if not my_docs:
+                st.info("🎉 현재 처리하실 결재 문서가 없습니다.")
+            else:
+                for doc in my_docs:
+                    with st.expander(f"📄 {doc['title']}"):
+                        st.write(f"**상세 내용:** {doc['content']}")
+                        st.write(f"**지정된 전체 결재자:** {doc['approvers']}")
+                        current_approved = doc.get('approved_by') if doc.get('approved_by') else "없음"
+                        st.write(f"**현재까지 승인 완료한 사람:** {current_approved}")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button("✅ 내 순서 승인하기", key=f"app_{doc['id']}"):
+                                # 방금 도장 찍은 내 이름을 기존 목록에 추가
+                                new_approved_by = doc.get('approved_by', '') + f"{current_admin},"
+                                
+                                # 모든 지정된 사람이 다 도장을 찍었는지 검사
+                                approvers_list = [name.strip() for name in doc['approvers'].split(',') if name.strip()]
+                                approved_list = [name.strip() for name in new_approved_by.split(',') if name.strip()]
+                                
+                                # 지정된 명단이 모두 승인 명단에 포함되어 있다면 최종 통과!
+                                if set(approvers_list).issubset(set(approved_list)):
+                                    new_status = "최종 통과 (승인됨)"
+                                else:
+                                    new_status = "대기중" # 아직 다른 사람의 승인이 남음
+                                    
+                                # DB에 업데이트
+                                supabase.table("approvals").update({
+                                    "approved_by": new_approved_by,
+                                    "status": new_status
+                                }).eq("id", doc['id']).execute()
+                                
+                                st.rerun()
+                        with col2:
+                            # 1명이라도 반려하면 서류는 즉시 반려 처리됩니다.
+                            if st.button("❌ 반려하기", key=f"rej_{doc['id']}"):
+                                supabase.table("approvals").update({"status": "반려됨"}).eq("id", doc['id']).execute()
+                                st.rerun()
+        else:
+            st.info("결재 문서를 보려면 위에서 접속자 이름을 선택해 주세요.")
+
     st.stop() # 👈 다른 메뉴를 선택했을 때는 여기서 화면 그리기를 멈춥니다!
 
 
