@@ -21,7 +21,7 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap');
 html, body, [class*="css"]  {
     font-family: 'Nanum Gothic', sans-serif !important;
-    font-size: 18px !important; 
+    font-size: 14px !important; /* 🌟 기존 18px에서 14px로 두 단계 낮춤 */
 }
 </style>
 """, unsafe_allow_html=True)
