@@ -28,37 +28,34 @@ html, body, [class*="css"]  {
 
 
 # ==========================================
-# 🔒 3. 보안 로그인 시스템 추가 🌟
+# 🔒 3. 보안 로그인 시스템
 # ==========================================
-# 접속 상태를 기억하는 메모리 공간 생성
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
     st.session_state['username'] = None
 
-# 로그인하지 않은 상태면 로그인 화면만 보여줌
 if not st.session_state['logged_in']:
-    st.title("🔐 (주)호성 통합시스템 로그인")
+    # 🌟 로그인 화면 글자 크기 축소
+    st.subheader("🔐 (주)호성 통합시스템 로그인")
     
     col1, col2 = st.columns([1, 2])
     with col1:
-        # 기안을 올리는 '직원'과 결재를 하는 '관리자'들을 모두 포함
         login_name = st.selectbox("👤 접속자 이름", ["직원", "김공장장", "이이사", "박대표", "최팀장"])
         login_pw = st.text_input("🔑 비밀번호", type="password")
         
         if st.button("로그인"):
-            # 💡 현재는 테스트를 위해 모든 비밀번호를 '1234'로 통일해 둡니다. (추후 개별 설정 가능)
             if login_pw == "1234":
                 st.session_state['logged_in'] = True
                 st.session_state['username'] = login_name
-                st.rerun() # 화면 새로고침
+                st.rerun()
             else:
                 st.error("⚠️ 비밀번호가 틀렸습니다.")
                 
-    st.stop() # 👈 로그인 안 하면 아래 코드(메인 화면)는 절대 안 보입니다!
+    st.stop()
 
 
 # ==========================================
-# 🌟 로그인 성공 시 나타나는 왼쪽 메뉴바 🌟
+# 왼쪽 메뉴바
 # ==========================================
 with st.sidebar:
     st.success(f"👤 **{st.session_state['username']}**님 접속 중")
@@ -68,15 +65,15 @@ with st.sidebar:
         st.rerun()
         
     st.markdown("---")
-    st.title("🏢 (주)호성 통합메뉴")
+    st.markdown("### 🏢 (주)호성 통합메뉴")
     menu = st.radio("메뉴를 선택하세요", 
                     ["⚙️ 기계설비 관리", "📝 전자결재 (기안)", "📦 물류 및 재고 (ERP)"])
+
 
 # ==========================================
 # [메뉴 1] 기계설비 및 유지보수 관리 화면
 # ==========================================
 if menu == "⚙️ 기계설비 관리":
-    # 🌟 기존 st.title 대신 글자 크기가 아담한 st.subheader 사용
     st.subheader("⚙️ 기계설비 및 유지보수 관리")
     
     tab_equip, tab_inspect, tab_parts, tab_data = st.tabs(["🚜 설비 등록 및 현황", "🔍 점검 내역 관리", "🔩 부품 교체 관리", "📊 이력 조회 및 데이터 관리"])
@@ -87,10 +84,8 @@ if menu == "⚙️ 기계설비 관리":
     equip_names = sorted(list(set([row['name'] for row in equip_data]))) if equip_data else ["등록된 설비 없음"]
     existing_locations = sorted(list(set([row['location'] for row in equip_data if row.get('location')]))) if equip_data else []
     
-    # --- [탭 1] 설비 등록 및 현황 ---
     with tab_equip:
         st.write("신규 설비를 등록하고 현재 상태를 확인합니다.")
-        
         with st.expander("➕ 신규 설비 등록하기", expanded=False):
             loc_choice = st.selectbox("설치 위치 및 공정 선택", ["직접 새 위치 입력하기"] + existing_locations)
             if loc_choice == "직접 새 위치 입력하기":
@@ -107,11 +102,8 @@ if menu == "⚙️ 기계설비 관리":
                 if equip_name and final_location:
                     photo_name = equip_photo.name if equip_photo else "사진 없음"
                     supabase.table("equipment").insert({
-                        "name": equip_name, 
-                        "location": final_location, 
-                        "status": status,
-                        "cost": equip_cost,
-                        "photo": photo_name
+                        "name": equip_name, "location": final_location, "status": status,
+                        "cost": equip_cost, "photo": photo_name
                     }).execute()
                     st.success(f"✅ [{equip_name}] 등록 완료!")
                     st.rerun()
@@ -127,19 +119,13 @@ if menu == "⚙️ 기계설비 관리":
             df_equip_display['등록일'] = df_equip_display['등록일'].apply(lambda x: x[:10])
             st.dataframe(df_equip_display, use_container_width=True, hide_index=True)
             
-    # --- [탭 2] 점검 내역 관리 ---
     with tab_inspect:
         st.write("설비의 정기/수시 점검 내역을 기록합니다.")
-        
         with st.form("inspect_form"):
             target_equip_ins = st.selectbox("점검한 설비 선택", equip_names)
             inspect_detail = st.text_area("점검 상세 내역 및 조치사항")
-            
             if st.form_submit_button("점검 내역 저장") and target_equip_ins != "등록된 설비 없음":
-                supabase.table("inspections").insert({
-                    "equipment_name": target_equip_ins,
-                    "detail": inspect_detail
-                }).execute()
+                supabase.table("inspections").insert({"equipment_name": target_equip_ins, "detail": inspect_detail}).execute()
                 st.success("✅ 점검 내역이 저장되었습니다.")
                 st.rerun()
                 
@@ -152,16 +138,13 @@ if menu == "⚙️ 기계설비 관리":
             df_ins_display['점검일자'] = df_ins_display['점검일자'].apply(lambda x: x[:10])
             st.dataframe(df_ins_display, use_container_width=True, hide_index=True)
 
-    # --- [탭 3] 부품 교체 관리 ---
     with tab_parts:
         st.write("부품 교체 및 수리 내역을 등록합니다.")
-        
         res_parts = supabase.table("parts").select("*").execute()
         parts_data = res_parts.data if res_parts.data else []
         existing_parts = sorted(list(set([row['part_name'] for row in parts_data if row.get('part_name')]))) if parts_data else []
         
         target_equip_part = st.selectbox("부품을 교체한 설비 선택", equip_names)
-        
         part_choice = st.selectbox("교체 부품명 선택", ["직접 새 부품명 입력하기"] + existing_parts)
         if part_choice == "직접 새 부품명 입력하기":
             final_part_name = st.text_input("새로운 부품명 입력")
@@ -169,26 +152,18 @@ if menu == "⚙️ 기계설비 관리":
             final_part_name = part_choice
             
         col_q, col_p, col_t = st.columns(3)
-        with col_q:
-            part_qty = st.number_input("교체 수량", min_value=1, step=1, value=1)
-        with col_p:
-            part_price = st.number_input("부품 단가 (원)", min_value=0, step=1000)
+        with col_q: part_qty = st.number_input("교체 수량", min_value=1, step=1, value=1)
+        with col_p: part_price = st.number_input("부품 단가 (원)", min_value=0, step=1000)
             
         total_price = part_qty * part_price
-        with col_t:
-            st.info(f"**자동 합계 금액:** {total_price:,} 원")
+        with col_t: st.info(f"**자동 합계 금액:** {total_price:,} 원")
             
         part_detail = st.text_input("기타 특이사항 (선택)")
-        
         if st.button("부품 교체 등록 저장"):
             if target_equip_part != "등록된 설비 없음" and final_part_name:
                 supabase.table("parts").insert({
-                    "equipment_name": target_equip_part,
-                    "part_name": final_part_name,
-                    "quantity": part_qty,
-                    "unit_price": part_price,
-                    "total_cost": total_price,
-                    "detail": part_detail
+                    "equipment_name": target_equip_part, "part_name": final_part_name,
+                    "quantity": part_qty, "unit_price": part_price, "total_cost": total_price, "detail": part_detail
                 }).execute()
                 st.success("✅ 부품 교체 내역이 저장되었습니다.")
                 st.rerun()
@@ -201,10 +176,8 @@ if menu == "⚙️ 기계설비 관리":
             df_pts_display['교체일자'] = df_pts_display['교체일자'].apply(lambda x: x[:10])
             st.dataframe(df_pts_display, use_container_width=True, hide_index=True)
 
-    # --- [탭 4] 이력 조회 및 CSV 데이터 관리 ---
     with tab_data:
         st.write("특정 설비의 이력을 날짜별로 조회하거나 데이터를 관리(수정/삭제/CSV)합니다.")
-        
         st.subheader("🔎 특정 설비 이력 조회")
         search_target = st.selectbox("이력을 조회할 설비를 선택하세요", equip_names, key="search_eq")
         
@@ -222,47 +195,32 @@ if menu == "⚙️ 기계설비 관리":
                 
         st.markdown("---")
         st.subheader("💾 CSV 내보내기 및 데이터 삭제")
-        st.write("데이터를 엑셀(CSV)로 다운로드하거나, 잘못 입력된 데이터를 ID(관리번호)를 통해 삭제할 수 있습니다.")
-        
         col_down, col_del = st.columns(2)
         with col_down:
             if parts_data:
                 csv = df_all_parts.to_csv(index=False).encode('utf-8-sig')
-                st.download_button(
-                    label="📥 전체 부품 교체 내역 CSV 다운로드",
-                    data=csv,
-                    file_name='parts_history.csv',
-                    mime='text/csv',
-                )
+                st.download_button("📥 전체 부품 교체 내역 CSV 다운로드", data=csv, file_name='parts_history.csv', mime='text/csv')
         with col_del:
             delete_id = st.number_input("삭제할 데이터의 고유 ID 번호", min_value=0, step=1)
             if st.button("해당 ID 데이터 완전히 삭제"):
                 if delete_id > 0:
                     supabase.table("parts").delete().eq("id", delete_id).execute()
-                    st.success(f"ID {delete_id}번 데이터가 성공적으로 삭제되었습니다.")
+                    st.success(f"ID {delete_id}번 데이터가 삭제되었습니다.")
                     st.rerun()
 
-    st.stop()
+
 # ==========================================
 # [메뉴 2] 전자결재 시스템 화면
 # ==========================================
-if menu == "📝 전자결재 (기안)":
-    st.title("📝 사내 전자결재 시스템")
+elif menu == "📝 전자결재 (기안)":
+    st.subheader("📝 사내 전자결재 시스템")
     
     tab_draft, tab_approve, tab_archive = st.tabs(["📝 기안 작성", "✅ 결재함 (관리자용)", "🗄️ 결재 완료 문서함"])
-    
     admin_list = ["김공장장", "이이사", "박대표", "최팀장"]
     
-    # --- [탭 1] 직원이 기안하는 화면 ---
     with tab_draft:
         st.write("문서 양식을 선택한 후, 빈칸을 채워 결재를 상신해 주세요.")
-        
-        doc_type = st.radio(
-            "📋 문서 양식 선택", 
-            ["📝 공문형 기안문", "💰 지출 품의서", "📊 표준 보고서"], 
-            horizontal=True
-        )
-        
+        doc_type = st.radio("📋 문서 양식 선택", ["📝 공문형 기안문", "💰 지출 품의서", "📊 표준 보고서"], horizontal=True)
         doc_title = st.text_input("문서 제목")
         
         if doc_type == "📝 공문형 기안문":
@@ -273,12 +231,7 @@ if menu == "📝 전자결재 (기안)":
             template = "[ 📄 주 요 업 무  보 고 서 ]\n\n■ 보고 일자 : 202 년   월   일\n■ 보  고  자 : 소속          성명          (서명)\n--------------------------------------------------\n1. 현황 및 배경\n   - [현재 상황이나 보고를 하게 된 배경을 요약]\n\n2. 주요 추진 내용 (또는 발생한 문제점)\n   - [핵심적인 업무 진행 상황이나 상세 내역 기술]\n   - \n\n3. 향후 계획 (또는 개선 방안)\n   - [앞으로의 일정이나 문제 해결을 위한 구체적 방안 기술]\n   - \n\n4. 건의 및 요청사항\n   - [결재권자의 지원이 필요한 부분이나 참고사항 기술]\n"
             
         doc_content = st.text_area("상세 내용 작성", value=template, height=450)
-        
-        selected_approvers = st.multiselect(
-            "결재권자 지정 (최대 3명 선택 가능)", 
-            options=admin_list, 
-            max_selections=3
-        )
+        selected_approvers = st.multiselect("결재권자 지정 (최대 3명 선택 가능)", options=admin_list, max_selections=3)
         
         if st.button("결재 상신하기"):
             if doc_title == "" or len(selected_approvers) == 0:
@@ -287,26 +240,14 @@ if menu == "📝 전자결재 (기안)":
                 approvers_str = ",".join(selected_approvers)
                 type_prefix = doc_type.split(" ")[1] 
                 final_title = f"[{type_prefix}] {doc_title}"
-                
-                data = {
-                    "title": final_title,
-                    "content": doc_content,
-                    "status": "대기중",
-                    "approvers": approvers_str,
-                    "approved_by": ""
-                }
+                data = {"title": final_title, "content": doc_content, "status": "대기중", "approvers": approvers_str, "approved_by": ""}
                 supabase.table("approvals").insert(data).execute()
                 st.success("✅ 결재가 성공적으로 상신되었습니다!")
                 
-    # --- [탭 2] 사장님이 결재하는 화면 ---
     with tab_approve:
-        # 🌟 가짜 로그인 창을 없애고, 진짜 로그인한 사람의 이름을 가져옵니다!
         current_admin = st.session_state['username']
-        
-        # '직원'이 아니라 '관리자' 명단에 있는 사람일 때만 결재함을 보여줌
         if current_admin in admin_list:
             st.write(f"반갑습니다, **{current_admin}**님! 결재 대기 문서를 확인합니다.")
-            
             res = supabase.table("approvals").select("*").eq("status", "대기중").execute()
             pending_docs = res.data
             
@@ -321,7 +262,7 @@ if menu == "📝 전자결재 (기안)":
             else:
                 for doc in my_docs:
                     with st.expander(f"📄 {doc['title']}"):
-                        st.write(f"**상세 내용:**")
+                        st.write("**상세 내용:**")
                         st.info(doc['content'])
                         st.write(f"- **지정된 전체 결재자:** {doc['approvers']}")
                         current_approved = doc.get('approved_by') if doc.get('approved_by') else "없음"
@@ -333,16 +274,8 @@ if menu == "📝 전자결재 (기안)":
                                 new_approved_by = doc.get('approved_by', '') + f"{current_admin},"
                                 approvers_list = [name.strip() for name in doc['approvers'].split(',') if name.strip()]
                                 approved_list = [name.strip() for name in new_approved_by.split(',') if name.strip()]
-                                
-                                if set(approvers_list).issubset(set(approved_list)):
-                                    new_status = "최종 통과 (승인됨)"
-                                else:
-                                    new_status = "대기중"
-                                    
-                                supabase.table("approvals").update({
-                                    "approved_by": new_approved_by,
-                                    "status": new_status
-                                }).eq("id", doc['id']).execute()
+                                new_status = "최종 통과 (승인됨)" if set(approvers_list).issubset(set(approved_list)) else "대기중"
+                                supabase.table("approvals").update({"approved_by": new_approved_by, "status": new_status}).eq("id", doc['id']).execute()
                                 st.rerun()
                         with col2:
                             if st.button("❌ 반려하기", key=f"rej_{doc['id']}"):
@@ -351,10 +284,8 @@ if menu == "📝 전자결재 (기안)":
         else:
             st.warning("🔒 결재 권한이 없습니다. (관리자 계정으로 로그인해 주세요)")
 
-    # --- [탭 3] 결재 완료 문서 보관 및 출력 화면 ---
     with tab_archive:
         st.write("결재가 끝난(승인/반려) 문서를 열람하고 다운로드(출력)합니다.")
-        
         res = supabase.table("approvals").select("*").neq("status", "대기중").order("id", desc=True).execute()
         completed_docs = res.data
         
@@ -370,38 +301,26 @@ if menu == "📝 전자결재 (기안)":
                     st.write(f"- **지정된 결재자:** {doc['approvers']}")
                     st.write(f"- **최종 승인자:** {doc.get('approved_by', '없음')}")
                     st.markdown("---")
-                    st.write(f"**[상세 요청 내용]**")
+                    st.write("**[상세 요청 내용]**")
                     st.info(doc['content'])
-                    
                     doc_text = f"======================================\n         결 재 완 료 문 서\n======================================\n■ 기안 제목: {doc['title']}\n■ 기안 일자: {doc['created_at'][:10]}\n■ 결재 상태: {doc['status']}\n■ 지정 결재자: {doc['approvers']}\n■ 승인 완료자: {doc.get('approved_by', '없음')}\n--------------------------------------\n{doc['content']}\n======================================"
-                    
-                    st.download_button(
-                        label="💾 문서 다운로드 (인쇄/보관용)",
-                        data=doc_text,
-                        file_name=f"결재문서_{doc['title']}.txt",
-                        mime="text/plain",
-                        key=f"dl_{doc['id']}"
-                    )
-                    st.caption("💡 팁: 다운로드한 텍스트 파일을 열어 인쇄(Ctrl+P)를 통해 PDF로 변환하거나, 기기에 보관하실 수 있습니다.")
+                    st.download_button(label="💾 문서 다운로드 (인쇄/보관용)", data=doc_text, file_name=f"결재문서_{doc['title']}.txt", mime="text/plain", key=f"dl_{doc['id']}")
 
-    st.stop()
+
 # ==========================================
 # [메뉴 3] 재고/물류 관리 (ERP) 화면
 # ==========================================
 elif menu == "📦 물류 및 재고 (ERP)":
-    st.title("📦 실시간 재고/물류 관리")
+    st.subheader("📦 실시간 재고/물류 관리")
     
     tab_input, tab_dashboard = st.tabs(["🚛 물류 입출고 등록", "📊 실시간 재고 대시보드"])
     
-    # --- [탭 1] 입출고 등록 화면 ---
     with tab_input:
         st.write("입고, 출고, 사용 내역과 단위를 정확히 기록해 주세요.")
-        
         with st.form("inventory_form"):
             col1, col2 = st.columns(2)
             with col1:
                 log_date = st.date_input("일시 (날짜 선택)", date.today())
-                
                 item_list = [
                     "골재(1등급 25mm)", "골재(25mm)", "골재(1등급 20mm)", 
                     "골재(20mm)", "골재(1등급 13mm)", "골재(13mm)", 
@@ -409,31 +328,21 @@ elif menu == "📦 물류 및 재고 (ERP)":
                 ]
                 item_type = st.selectbox("품목 선택", item_list)
                 in_out = st.radio("물류 구분", ["입고", "출고", "사용"], horizontal=True)
-                
             with col2:
                 unit = st.selectbox("단위 선택", ["톤(t)", "m³ (루베)", "L (리터)"])
                 quantity = st.number_input("수량", min_value=0.0, step=0.1, format="%.1f")
                 
             submitted = st.form_submit_button("저장하기")
-            
             if submitted:
                 if quantity <= 0:
                     st.warning("⚠️ 0보다 큰 수량을 입력해 주세요.")
                 else:
-                    data = {
-                        "log_date": str(log_date),
-                        "item_type": item_type,
-                        "in_out": in_out,
-                        "unit": unit,
-                        "weight": quantity 
-                    }
+                    data = {"log_date": str(log_date), "item_type": item_type, "in_out": in_out, "unit": unit, "weight": quantity}
                     supabase.table("inventory").insert(data).execute()
                     st.success(f"✅ {log_date} | [{item_type}] {quantity} {unit} - {in_out} 기록이 저장되었습니다!")
                     
-    # --- [탭 2] 재고 대시보드 화면 ---
     with tab_dashboard:
         st.write("현재까지 누적된 품목별 재고 현황 및 변화 트렌드입니다.")
-        
         res = supabase.table("inventory").select("*").execute()
         inv_data = res.data
         
@@ -441,15 +350,12 @@ elif menu == "📦 물류 및 재고 (ERP)":
             st.info("아직 등록된 물류 내역이 없습니다.")
         else:
             df = pd.DataFrame(inv_data)
-            
             if 'unit' not in df.columns: df['unit'] = '톤(t)'
             df['unit'] = df['unit'].fillna('톤(t)')
-            
             if 'log_date' not in df.columns: df['log_date'] = df['created_at'].apply(lambda x: x[:10])
             df['log_date'] = df['log_date'].fillna(df['created_at'].apply(lambda x: x[:10]))
             
             df['calc_qty'] = df.apply(lambda x: x['weight'] if x['in_out'] == '입고' else -x['weight'], axis=1)
-            
             inventory_summary = df.groupby(['item_type', 'unit'])['calc_qty'].sum().reset_index()
             inventory_summary.columns = ['품목명', '단위', '현재 재고']
             
@@ -459,37 +365,21 @@ elif menu == "📦 물류 및 재고 (ERP)":
                     st.metric(label=f"📦 {row['품목명']}", value=f"{row['현재 재고']:.1f} {row['단위']}")
             
             st.markdown("---")
-            
-            # 🌟 [화면 2] 중단: 선택형 품목 트렌드 그래프 🌟
             st.write("📈 **품목별 누적 재고 트렌드**")
-            
             daily_changes = df.groupby(['log_date', 'item_type'])['calc_qty'].sum().reset_index()
             pivot_df = daily_changes.pivot(index='log_date', columns='item_type', values='calc_qty').fillna(0)
             trend_df = pivot_df.cumsum()
             
-            # 저장된 데이터 중 존재하는 품목만 리스트로 가져오기
             available_items = trend_df.columns.tolist()
+            selected_items = st.multiselect("📊 그래프에서 조회할 품목을 선택/해제하세요", options=available_items, default=available_items)
             
-            # 선택창 생성 (기본값으로 모든 품목이 보이게 설정)
-            selected_items = st.multiselect(
-                "📊 그래프에서 조회할 품목을 선택/해제하세요", 
-                options=available_items, 
-                default=available_items
-            )
-            
-            # 선택된 품목이 1개 이상일 때만 그래프 표시
             if selected_items:
                 st.line_chart(trend_df[selected_items])
             else:
                 st.info("👆 위 선택창에서 그래프로 보고 싶은 품목을 선택해 주세요.")
             
             st.markdown("---")
-            
             st.write("📋 **상세 입출고/사용 기록 (최근 순)**")
-            
             df_display = df[['log_date', 'item_type', 'in_out', 'weight', 'unit']].sort_values(by='log_date', ascending=False)
             df_display.columns = ['일시', '품목', '구분', '수량', '단위']
-            
             st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-    st.stop()
