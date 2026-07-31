@@ -5,6 +5,15 @@ from datetime import date, datetime, timedelta
 import os
 import time
 
+# 기본 메뉴, 헤더, 푸터(Made with Streamlit)를 숨기는 CSS 코드
+hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;} /* 우측 상단 햄버거 메뉴 숨김 */
+            footer {visibility: hidden;}    /* 하단 Made with Streamlit 숨김 */
+            header {visibility: hidden;}    /* 상단 여백 및 헤더 숨김 */
+            </style>
+            """
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # --- 1. Supabase 클라우드 데이터베이스 연결 ---
 @st.cache_resource
 def init_connection():
