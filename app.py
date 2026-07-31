@@ -66,20 +66,21 @@ if not st.session_state['logged_in']:
 
 
 # ==========================================
-# 🏢 4. 왼쪽 메뉴바
+# 🏢 4. 상단 메뉴바 (모바일 최적화)
 # ==========================================
-with st.sidebar:
+col_log1, col_log2 = st.columns([3, 1])
+with col_log1:
     st.success(f"👤 **{st.session_state['username']}**님 접속 중")
+with col_log2:
     if st.button("로그아웃"):
         st.session_state['logged_in'] = False
         st.session_state['username'] = None
         st.rerun()
-        
-    st.markdown("---")
-    st.markdown("### 🏢 (주)호성 통합메뉴")
-    menu = st.radio("메뉴를 선택하세요", 
-                    ["⚙️ 기계설비 관리", "📝 전자결재 (기안)", "📦 물류 및 재고 (ERP)"])
 
+st.markdown("### 🏢 (주)호성 통합메뉴")
+menu = st.selectbox("📌 이동할 메뉴를 터치하세요", 
+                    ["⚙️ 기계설비 관리", "📝 전자결재 (기안)", "📦 물류 및 재고 (ERP)"])
+st.markdown("---")
 
 # ==========================================
 # [메뉴 1] 기계설비 및 유지보수 관리 화면
