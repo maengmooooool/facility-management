@@ -311,7 +311,7 @@ if menu == "⚙️ 기계설비 관리":
 
     # --- [탭 4] 이력 조회 및 데이터 관리 ---
     with tab_data:
-        st.write("특정 설비의 이력을 날짜별로 조회하거나 데이터를 관리(수정/삭제/CSV)합니다.")
+        st.write("특정 설비의 이력을 날짜별로 조회하거나 데이터를 관리 합니다.")
         
         search_target = st.selectbox("이력을 조회할 설비를 선택하세요", equip_names, key="search_eq")
         
