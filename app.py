@@ -358,30 +358,62 @@ elif menu == "📝 전자결재 (기안)":
     admin_list = ["기계실팀장", "이사", "관리이사", "대표"]
     
     with tab_draft:
-        st.write("문서 양식을 선택한 후, 빈칸을 채워 결재를 상신해 주세요.")
-        doc_type = st.radio("📋 문서 양식 선택", ["📝 공문형 기안문", "💰 지출 품의서", "📊 표준 보고서"], horizontal=True)
-        doc_title = st.text_input("문서 제목")
+        st.write("작성할 양식을 선택하고, 요약 내용을 입력한 뒤 작성된 워드(Word) 폼을 첨부해 주세요.")
         
-        if doc_type == "📝 공문형 기안문":
-            template = "(주) 호 성\n\n수신자: [수신 부서 또는 직책]\n(경유): \n제  목: [여기에 제목을 한 번 더 입력하세요]\n--------------------------------------------------\n1. 귀 부서의 노고에 감사드립니다.\n2. [기안의 배경 및 목적을 간략히 기재하세요.]\n3. 위와 관련하여 아래와 같이 업무를 추진하고자 하오니 검토 후 재가하여 주시기 바랍니다.\n\n                        - 아    래 -\n        \n가. 일시/기간: \n나. 대상/장소: \n다. 소요 예산: \n라. 상세 내용: \n        \n붙임  1. [첨부문서 1 이름] 1부.\n      2. [첨부문서 2 이름] 1부.  끝.\n\n                     (주) 호 성 대 표 이 사"
+        # 1. 요청하신 순서대로 양식 순서 변경
+        doc_type = st.radio("📋 문서 양식 선택", ["📝 기안문", "📊 보고서", "💰 지출 품의서"], horizontal=True)
+        
+        # 2. 양식별 안내 (추후 워드 템플릿 다운로드 주소를 넣을 수 있습니다)
+        if doc_type == "📝 기안문":
+            st.markdown("👉 **[기안문 양식 다운로드 (클릭)](#)** *(추후 실제 파일 링크로 교체 가능)*")
+            template_text = "■ 기안 요약:\n\n※ 상세 내용은 첨부된 워드 파일을 참조 바랍니다."
+        elif doc_type == "📊 보고서":
+            st.markdown("👉 **[보고서 양식 다운로드 (클릭)](#)**")
+            template_text = "■ 주요 보고 내용 요약:\n\n※ 상세 내용은 첨부된 워드 파일을 참조 바랍니다."
         elif doc_type == "💰 지출 품의서":
-            template = "■ 청구 내역 (품목/공사명):\n\n■ 예상 비용 (VAT 포함):\n             원\n■ 결제 수단 (법인카드/계좌이체 등):\n\n■ 거래처 정보 (상호/연락처):\n\n■ 첨부(영수증/견적서) 유무:\n"
-        elif doc_type == "📊 표준 보고서":
-            template = "[ 📄 주 요 업 무  보 고 서 ]\n\n■ 보고 일자 : 202 년   월   일\n■ 보  고  자 : 소속          성명          (서명)\n--------------------------------------------------\n1. 현황 및 배경\n   - [현재 상황이나 보고를 하게 된 배경을 요약]\n\n2. 주요 추진 내용 (또는 발생한 문제점)\n   - [핵심적인 업무 진행 상황이나 상세 내역 기술]\n   - \n\n3. 향후 계획 (또는 개선 방안)\n   - [앞으로의 일정이나 문제 해결을 위한 구체적 방안 기술]\n   - \n\n4. 건의 및 요청사항\n   - [결재권자의 지원이 필요한 부분이나 참고사항 기술]\n"
+            st.markdown("👉 **[지출 품의서 양식 다운로드 (클릭)](#)**")
+            template_text = "■ 총 청구 금액: \n\n※ 영수증 및 상세 내역은 첨부된 워드 파일을 참조 바랍니다."
             
-        doc_content = st.text_area("상세 내용 작성", value=template, height=450)
+        doc_title = st.text_input("문서 제목")
+        doc_content = st.text_area("요약 내용 입력", value=template_text, height=150)
+        
+        # 3. 작성된 MS Word 폼 파일 첨부 기능 추가
+        attached_file = st.file_uploader("📎 작성 완료된 MS Word 파일 또는 증빙자료 첨부", type=["doc", "docx", "pdf", "jpg", "png"])
+        
         selected_approvers = st.multiselect("결재권자 지정 (최대 3명 선택 가능)", options=admin_list, max_selections=3)
         
         if st.button("결재 상신하기"):
             if doc_title == "" or len(selected_approvers) == 0:
                 st.warning("⚠️ 문서 제목을 입력하고, 결재권자를 최소 1명 이상 지정해 주세요.")
             else:
+                file_url = "첨부파일 없음"
+                
+                # 수파베이스(Supabase)에 워드 파일 업로드
+                if attached_file is not None:
+                    file_bytes = attached_file.getvalue()
+                    ext = attached_file.name.split('.')[-1]
+                    file_path = f"approval_{int(time.time())}.{ext}"
+                    try:
+                        supabase.storage.from_("approvals-files").upload(file_path, file_bytes)
+                        file_url = supabase.storage.from_("approvals-files").get_public_url(file_path)
+                    except Exception as e:
+                        st.error("⚠️ 파일 첨부 실패! (수파베이스에 'approvals-files' 버킷을 만들어주세요)")
+                        file_url = "업로드 실패"
+                
+                # 본문 텍스트 맨 아래에 첨부파일 다운로드 링크 달아주기
+                final_content = doc_content
+                if file_url.startswith("http"):
+                    final_content += f"\n\n---\n**📎 [첨부파일 열기 및 다운로드]({file_url})**"
+                    
                 approvers_str = ",".join(selected_approvers)
                 type_prefix = doc_type.split(" ")[1] 
                 final_title = f"[{type_prefix}] {doc_title}"
-                data = {"title": final_title, "content": doc_content, "status": "대기중", "approvers": approvers_str, "approved_by": ""}
+                
+                data = {"title": final_title, "content": final_content, "status": "대기중", "approvers": approvers_str, "approved_by": ""}
                 supabase.table("approvals").insert(data).execute()
                 st.success("✅ 결재가 성공적으로 상신되었습니다!")
+                time.sleep(1)
+                st.rerun()
                 
     with tab_approve:
         current_admin = st.session_state['username']
@@ -401,7 +433,7 @@ elif menu == "📝 전자결재 (기안)":
             else:
                 for doc in my_docs:
                     with st.expander(f"📄 {doc['title']}"):
-                        st.write("**상세 내용:**")
+                        st.markdown("**[기안 내용 및 첨부파일]**")
                         st.info(doc['content'])
                         st.write(f"- **지정된 전체 결재자:** {doc['approvers']}")
                         current_approved = doc.get('approved_by') if doc.get('approved_by') else "없음"
@@ -415,10 +447,12 @@ elif menu == "📝 전자결재 (기안)":
                                 approved_list = [name.strip() for name in new_approved_by.split(',') if name.strip()]
                                 new_status = "최종 통과 (승인됨)" if set(approvers_list).issubset(set(approved_list)) else "대기중"
                                 supabase.table("approvals").update({"approved_by": new_approved_by, "status": new_status}).eq("id", doc['id']).execute()
+                                time.sleep(1)
                                 st.rerun()
                         with col2:
                             if st.button("❌ 반려하기", key=f"rej_{doc['id']}"):
                                 supabase.table("approvals").update({"status": "반려됨"}).eq("id", doc['id']).execute()
+                                time.sleep(1)
                                 st.rerun()
         else:
             st.warning("🔒 결재 권한이 없습니다. (관리자 계정으로 로그인해 주세요)")
@@ -440,11 +474,8 @@ elif menu == "📝 전자결재 (기안)":
                     st.write(f"- **지정된 결재자:** {doc['approvers']}")
                     st.write(f"- **최종 승인자:** {doc.get('approved_by', '없음')}")
                     st.markdown("---")
-                    st.write("**[상세 요청 내용]**")
+                    st.markdown("**[기안 내용 및 첨부파일]**")
                     st.info(doc['content'])
-                    doc_text = f"======================================\n         결 재 완 료 문 서\n======================================\n■ 기안 제목: {doc['title']}\n■ 기안 일자: {doc['created_at'][:10]}\n■ 결재 상태: {doc['status']}\n■ 지정 결재자: {doc['approvers']}\n■ 승인 완료자: {doc.get('approved_by', '없음')}\n--------------------------------------\n{doc['content']}\n======================================"
-                    st.download_button(label="💾 문서 다운로드 (인쇄/보관용)", data=doc_text, file_name=f"결재문서_{doc['title']}.txt", mime="text/plain", key=f"dl_{doc['id']}")
-
 
 # ==========================================
 # [메뉴 3] 재고/물류 관리 (ERP) 화면
